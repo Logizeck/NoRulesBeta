@@ -1,22 +1,29 @@
-# NO RULES — Beta 0.4.1
+# NO RULES — Beta 0.5.0
 
-25-level Android test build.
+Test build with 27 puzzle rooms.
 
-## Changes in 0.4.1
-- Persistent MENU button on every puzzle.
-- Readability overhaul: Android default bold typeface, larger minimum text sizes, higher contrast.
-- Hints are now persistent modal cards and remain visible until CLOSE / × is pressed.
-- Reworked unclear puzzle logic, especially Room 21 and Room 22.
-- 25-level selector remains available for rapid testing.
-- No real billing or ads yet; monetization remains deferred until gameplay findings are collected.
+## Key changes in 0.5.0
+- Fixed Canvas text rendering so labels no longer inherit thick STROKE settings from game artwork.
+- Reworked typography for clearer Android phone rendering.
+- Added the scarlet / white / black NR pseudo-kanji launcher icon.
+- Added Level 26: Beat Copy — listen to a four-tone rhythm and reproduce the timing by tapping.
+- Added Level 27: Selfie Trouble — request camera access, capture a selfie, then display it with cartoon glasses and a moustache.
+- Existing persistent hint overlay and MENU button retained.
+
+## Privacy / camera test behavior
+The selfie room launches the device camera through Android's camera intent. This beta uses the returned preview bitmap in memory for the puzzle and does not intentionally write the image to the app's own storage.
 
 ## Build
-GitHub Actions builds the debug APK automatically on push to main.
+The included GitHub Actions workflow builds `app-debug.apk` and uploads it as `NoRulesBeta-APK`.
 
+## Beta 0.5.1
 
-## Beta 0.4.3 — Screenshot puzzle
-Room 24 now uses Android 14+ ScreenCaptureCallback. The player must take a real device screenshot to solve the room. The app only receives a capture event; it does not receive or inspect the screenshot image.
-
-
-## New in 0.4.3
-Level 21 is now **SNOWMAN FACE**: drag two stones onto the eyes, the carrot onto the nose, and draw a curved smile with a finger. Hidden gag: bringing the carrot to the snowman's backside triggers the speech bubble `no, li no!`, blush, melting animation, and a full level reset.
+- 35 test levels.
+- New 3D-style snowman asset and expanded snowman fail/easter-egg sequence.
+- New key-fragment hunt rooms: Messy Desk, Toy Box, Kitchen Chaos, Sensor Vault, Master Key Forge.
+- New pitch-memory audio room, logic room and rub-to-reveal room.
+- Hidden surprise reactions on the title, balloon, ninja and snowman.
+- Main menu no longer advertises a fixed level count.
+- Text rendering now uses scaled font density for better accessibility/readability.
+- Approved scarlet/white/black NR pseudo-kanji launcher icon.
+- Optional BGM integration: add `app/src/main/res/raw/bgm_main.ogg` and rebuild.

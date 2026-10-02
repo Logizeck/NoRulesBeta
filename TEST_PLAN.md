@@ -1,23 +1,28 @@
-# Beta 0.4 Test Plan
+# Beta 0.5 test notes
 
-For each level, record:
-
-- Solved without hint? yes/no
-- Time to solve
-- Number of hints used
-- Was the intended interaction understood?
+For each level record:
+- Solved without hint? Y/N
+- Time to first correct insight
+- Was the solution logically deducible after seeing it? Y/N
+- Was any text hard to read? Y/N + screenshot
+- Did any control fail on the device? Y/N + device/Android version
 - Fun score 1–5
-- Frustration score 1–5
-- Device/sensor issue? yes/no + model
-- Comment / unexpected solution
 
-## What we are looking for
+Special tests:
+- L24 Screenshot: Android 14+ hardware screenshot detection.
+- L26 Beat Copy: test with media volume low/high and with Bluetooth audio.
+- L27 Selfie Trouble: test permission allow/deny, camera cancel, portrait selfie, different camera apps.
 
-Keep levels that produce a fast but satisfying realization. Rework levels where testers understand the mechanic but execution is unreliable. Remove levels where the solution feels arbitrary even after explanation.
+## Beta 0.5.1 focus
 
-## Monetization validation later
+Test levels 28–35 especially for multi-step clarity. For each room note:
+- Did the player understand that several sub-actions were required?
+- Did they discover at least one key fragment without an hint?
+- Did the final step feel earned rather than arbitrary?
+- Was any hidden surprise discovered organically?
 
-Only after the free campaign is stable, test purchase intent around:
-- hints after a genuine difficulty spike;
-- themed level packs after players have completed enough free content;
-- bundles without interruptive ads.
+Hidden-surprise checks:
+- Tap the NO RULES title repeatedly.
+- Pester the balloon instead of solving it normally.
+- Knock far too many times on the ninja room.
+- Trigger the snowman carrot easter egg and verify: speech bubble -> blush -> melt animation -> fail screen -> Retry/Menu.
