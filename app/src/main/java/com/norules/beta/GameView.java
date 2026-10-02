@@ -1,73 +1,388 @@
 package com.norules.beta;
 
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.graphics.*;
 import android.hardware.*;
+import android.media.AudioManager;
 import android.view.*;
 import java.util.*;
 
 public class GameView extends View implements SensorEventListener {
     private final Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final SensorManager sm; private final Sensor accel;
-    private int screen=0; // 0 intro, 1..6 rooms, 7 finish
-    private long flashUntil=0; private String flash="";
-    private float ax=0, ay=0; private long lastFrame=System.nanoTime();
-    private long roomStart=System.currentTimeMillis();
+    private final SensorManager sm;
+    private final Sensor accel;
+    private final AudioManager audio;
+    private final SharedPreferences prefs;
+    private final float density, scaledDensity;
 
-    // room 1
-    private float keyX,keyY,keyScale=1f,keyDX,keyDY; private boolean keyDrag=false; private float pinchStart=0,keyScaleStart=1;
-    // room 2
-    private float ballX,ballY,vx,vy;
-    // room 3
-    private long balloonHold=0; private float balloonR=46; private boolean balloonPopped=false;
-    // room 4
-    private long calmStart=0; private int calmResets=0;
-    // room 5
-    private int shadowPos=0; private final int[] shadowTarget={1,3,0,2};
+    private int screen = 0; // 0 home, 1..25 levels, 90 level select, 99 finish
+    private long roomStart = System.currentTimeMillis();
+    private String toast = "";
+    private long toastUntil = 0;
+    private int hints = 3;
 
-    public GameView(Context c){super(c);setKeepScreenOn(true);sm=(SensorManager)c.getSystemService(Context.SENSOR_SERVICE);accel=sm.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);setBackgroundColor(Color.rgb(111,199,232));}
-    public void onResumeGame(){if(accel!=null)sm.registerListener(this,accel,SensorManager.SENSOR_DELAY_GAME);lastFrame=System.nanoTime();postInvalidateOnAnimation();}
-    public void onPauseGame(){sm.unregisterListener(this);}    
-    @Override public void onSensorChanged(SensorEvent e){if(e.sensor.getType()==Sensor.TYPE_ACCELEROMETER){ax=-e.values[0];ay=e.values[1];}}
-    @Override public void onAccuracyChanged(Sensor s,int a){}
+    // sensors
+    private float ax, ay, az;
+    private float lastAx, lastAy, lastAz;
+    private long lastFrame = System.nanoTime();
+    private float stillScore = 0;
+    private int shakeCount = 0;
+    private long lastShake = 0;
 
-    private int C(String hex){return Color.parseColor(hex);}    
-    private void txt(Canvas c,String s,float x,float y,float size,int col,Paint.Align a){p.setStyle(Paint.Style.FILL);p.setTypeface(Typeface.create("sans",Typeface.BOLD));p.setTextSize(size);p.setColor(col);p.setTextAlign(a);c.drawText(s,x,y,p);}    
-    private void rr(Canvas c,float x,float y,float w,float h,float r,int col){p.setStyle(Paint.Style.FILL);p.setColor(col);c.drawRoundRect(x,y,x+w,y+h,r,r,p);}    
-    private void bg(Canvas c){
-        Paint q=new Paint();q.setShader(new LinearGradient(0,0,0,getHeight(),C("#78d4ef"),C("#f7d79a"),Shader.TileMode.CLAMP));c.drawRect(0,0,getWidth(),getHeight(),q);q.setShader(null);
-        p.setColor(C("#8ad06a"));p.setStyle(Paint.Style.FILL);Path a=new Path();a.moveTo(0,getHeight()*.78f);a.quadTo(getWidth()*.22f,getHeight()*.69f,getWidth()*.47f,getHeight()*.79f);a.quadTo(getWidth()*.72f,getHeight()*.88f,getWidth(),getHeight()*.73f);a.lineTo(getWidth(),getHeight());a.lineTo(0,getHeight());a.close();c.drawPath(a,p);
-        p.setColor(C("#66b653"));Path b=new Path();b.moveTo(0,getHeight()*.88f);b.quadTo(getWidth()*.35f,getHeight()*.76f,getWidth()*.63f,getHeight()*.90f);b.quadTo(getWidth()*.84f,getHeight()*.98f,getWidth(),getHeight()*.84f);b.lineTo(getWidth(),getHeight());b.lineTo(0,getHeight());b.close();c.drawPath(b,p);
+    // generic touches
+    private int pointerCount = 0;
+    private final float[] px = new float[10], py = new float[10];
+    private float downX, downY;
+    private long downAt;
+
+    // L1 pinch key
+    private float keyX, keyY, keyScale = 1f, keyDX, keyDY, pinchStart, keyScaleStart;
+    private boolean keyDrag;
+    // L2 / L23 ball
+    private float ballX, ballY, vx, vy;
+    // L3
+    private long balloonHold;
+    private float balloonR = 48;
+    private boolean balloonPopped;
+    // L4
+    private long calmStart;
+    // L5
+    private int liarChoice = -1;
+    // L7
+    private boolean shakeDropped;
+    // L8
+    private float fallY;
+    // L9
+    private int knockCount;
+    private long lastKnock;
+    // L10
+    private long bothHoldStart;
+    // L11
+    private float stickerX, stickerY;
+    private boolean stickerDrag;
+    // L12
+    private boolean slashDone;
+    // L14
+    private long stillStart;
+    // L15
+    private int rotatePhase;
+    // L16
+    private float doorScale = 1f;
+    private float doorPinchStart, doorScaleStart;
+    // L17
+    private float bubbleX, bubbleY;
+    private boolean bubbleDrag;
+    // L18
+    private float blueX, blueY, yellowX, yellowY;
+    private int orbDrag = 0;
+    private boolean greenMade;
+    // L19
+    private int memoryPhase;
+    private int memoryPos;
+    private long memoryShownAt;
+    private final int[] memorySeq = {2,0,3,1};
+    // L20
+    private String code = "";
+    // L21
+    private float titleCardX, titleCardY;
+    private boolean titleDrag;
+    // L22
+    private int oppositeChoice = -1;
+    // L23
+    private boolean gatePressed;
+    // L24
+    private boolean mirrorSolved;
+    // L25 boss
+    private int bossPhase;
+    private boolean bossSealRevealed;
+    private long bossBothStart;
+
+    private final String[] levelNames = {
+            "", "KEY PROBLEM", "GRAVITY STAR", "POP!", "ZEN DOOR", "LIAR CHIBI",
+            "THREE EYES", "SHAKE IT", "UPSIDE DOWN", "KNOCK KNOCK", "TWO SEALS",
+            "PEEL IT", "SAMURAI SLASH", "SHHH!", "STATUE MODE", "LEFT / RIGHT",
+            "BIG DOOR", "MOVE THE BUBBLE", "COLOR FUSION", "MEMORY FACES", "COUNT IT",
+            "BREAK THE UI", "OPPOSITE DAY", "TILT + HOLD", "MIRROR TRICK", "BOSS ROOM"
+    };
+
+    private final String[] hintsText = {
+            "",
+            "The key is not the wrong shape. It is the wrong size.",
+            "Your finger is not the controller. Gravity is.",
+            "A quick tap is not enough. Be persistent.",
+            "Maybe doing nothing is still doing something.",
+            "Ignore what he says. Look at where he is looking.",
+            "One finger cannot hide three eyes.",
+            "Treat the phone like a stubborn vending machine.",
+            "What if the whole room had to turn over?",
+            "The sound effect is also an instruction.",
+            "Two seals. Same moment.",
+            "That corner looks suspiciously removable.",
+            "Follow the manga speed line with one clean slash.",
+            "The room asks for silence. Your phone has a volume button.",
+            "A statue does not move.",
+            "The screen can stay portrait while the phone leans sideways.",
+            "Try changing the door, not the key.",
+            "Speech bubbles can block more than dialogue.",
+            "Blue + yellow has a useful result.",
+            "Watch first. Tap later.",
+            "Count cats, stars, then swords.",
+            "Not every piece of the interface has to stay in the interface.",
+            "He tells you he lies. Believe that part.",
+            "One hand opens the gate. The other controls gravity.",
+            "A mirror reverses directions.",
+            "The boss combines things you already learned."
+    };
+
+    public GameView(Context c) {
+        super(c);
+        density = getResources().getDisplayMetrics().density;
+        scaledDensity = getResources().getDisplayMetrics().scaledDensity;
+        sm = (SensorManager)c.getSystemService(Context.SENSOR_SERVICE);
+        accel = sm.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+        audio = (AudioManager)c.getSystemService(Context.AUDIO_SERVICE);
+        prefs = c.getSharedPreferences("no_rules_beta", Context.MODE_PRIVATE);
+        hints = prefs.getInt("hints", 3);
+        setKeepScreenOn(true);
+        setBackgroundColor(C("#F7E8C6"));
     }
-    private void title(Canvas c,String a,String b){rr(c,getWidth()*.08f,getHeight()*.035f,getWidth()*.84f,getHeight()*.12f,22,C("#fff8dc"));txt(c,a,getWidth()/2f,getHeight()*.086f,26,C("#3b4058"),Paint.Align.CENTER);txt(c,b,getWidth()/2f,getHeight()*.124f,13,C("#788096"),Paint.Align.CENTER);}    
-    private void button(Canvas c,String s,float x,float y,float w,float h){rr(c,x,y,w,h,22,C("#ffcf56"));p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(4);p.setColor(C("#3b4058"));c.drawRoundRect(x,y,x+w,y+h,22,22,p);txt(c,s,x+w/2,y+h*.63f,18,C("#3b4058"),Paint.Align.CENTER);}    
-    private void door(Canvas c,float cx,float cy,float w,float h){rr(c,cx-w/2,cy-h/2,w,h,28,C("#7d58c2"));p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(7);p.setColor(C("#51348d"));c.drawRoundRect(cx-w/2,cy-h/2,cx+w/2,cy+h/2,28,28,p);rr(c,cx-w*.39f,cy-h*.39f,w*.78f,h*.78f,20,C("#9873da"));p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(5);p.setColor(C("#3b275f"));c.drawArc(cx-w*.17f-12,cy-h*.07f-12,cx-w*.17f+12,cy-h*.07f+12,0,180,false,p);c.drawArc(cx+w*.17f-12,cy-h*.07f-12,cx+w*.17f+12,cy-h*.07f+12,0,180,false,p);p.setStyle(Paint.Style.FILL);c.drawCircle(cx,cy+h*.10f,7,p);p.setColor(C("#f6d35c"));c.drawCircle(cx+w*.29f,cy+h*.08f,8,p);}    
-    private void flash(String s){flash=s;flashUntil=System.currentTimeMillis()+700;}
-    private void next(){screen++;roomStart=System.currentTimeMillis();flash="";if(screen==1){keyX=getWidth()*.5f;keyY=getHeight()*.63f;keyScale=1f;}if(screen==2)resetBall();if(screen==3){balloonHold=0;balloonR=46;balloonPopped=false;}if(screen==4){calmStart=System.currentTimeMillis();calmResets=0;}if(screen==5)shadowPos=0;invalidate();}
-    private void resetBall(){ballX=getWidth()*.20f;ballY=getHeight()*.70f;vx=vy=0;lastFrame=System.nanoTime();}
 
-    @Override protected void onDraw(Canvas c){super.onDraw(c);if(screen==0)intro(c);else if(screen==1)r1(c);else if(screen==2)r2(c);else if(screen==3)r3(c);else if(screen==4)r4(c);else if(screen==5)r5(c);else if(screen==6)r6(c);else finish(c);if(!flash.isEmpty()&&System.currentTimeMillis()<flashUntil){rr(c,getWidth()*.20f,getHeight()*.90f,getWidth()*.60f,42,18,C("#3b4058"));txt(c,flash,getWidth()/2f,getHeight()*.90f+28,15,Color.WHITE,Paint.Align.CENTER);}postInvalidateOnAnimation();}
-    private void intro(Canvas c){bg(c);txt(c,"NO RULES",getWidth()/2f,getHeight()*.26f,46,C("#3b4058"),Paint.Align.CENTER);txt(c,"BETA 0.3",getWidth()/2f,getHeight()*.315f,17,C("#ef6b61"),Paint.Align.CENTER);rr(c,getWidth()*.12f,getHeight()*.37f,getWidth()*.76f,getHeight()*.20f,30,C("#fff5d6"));txt(c,"6 CARTOON ROOMS",getWidth()/2f,getHeight()*.435f,20,C("#3b4058"),Paint.Align.CENTER);txt(c,"Touch. Tilt. Wait. Think weird.",getWidth()/2f,getHeight()*.485f,15,C("#6d748a"),Paint.Align.CENTER);button(c,"PLAY",getWidth()*.20f,getHeight()*.66f,getWidth()*.60f,64);}
-    private void r1(Canvas c){bg(c);title(c,"ROOM 01","That key looks a little... oversized.");door(c,getWidth()*.5f,getHeight()*.36f,getWidth()*.27f,getHeight()*.30f);p.setColor(C("#392557"));p.setStyle(Paint.Style.FILL);c.drawCircle(getWidth()*.5f,getHeight()*.39f,10,p);c.drawRect(getWidth()*.5f-5,getHeight()*.39f,getWidth()*.5f+5,getHeight()*.39f+24,p);c.save();c.translate(keyX,keyY);c.scale(keyScale,keyScale);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(16);p.setStrokeCap(Paint.Cap.ROUND);p.setColor(C("#ffd45b"));c.drawCircle(-35,0,24,p);c.drawLine(-12,0,62,0,p);c.drawLine(62,0,62,20,p);c.drawLine(38,0,38,15,p);p.setStrokeCap(Paint.Cap.BUTT);c.restore();txt(c,"Pinch it smaller, then drag it to the lock.",getWidth()/2f,getHeight()*.82f,13,C("#536075"),Paint.Align.CENTER);if(keyScale<.48f&&Math.hypot(keyX-getWidth()*.5f,keyY-getHeight()*.39f)<55){flash("PERFECT FIT!");next();}}
-    private void r2(Canvas c){bg(c);title(c,"ROOM 02","Gravity is a control too.");float L=getWidth()*.09f,R=getWidth()*.91f,T=getHeight()*.23f,B=getHeight()*.78f;rr(c,L,T,R-L,B-T,28,C("#f7f0cf"));p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(5);p.setColor(C("#536075"));c.drawRoundRect(L,T,R,B,28,28,p);rr(c,getWidth()*.32f,getHeight()*.33f,getWidth()*.10f,getHeight()*.26f,16,C("#ef6b61"));rr(c,getWidth()*.55f,getHeight()*.49f,getWidth()*.12f,getHeight()*.22f,16,C("#5bbca8"));long n=System.nanoTime();float dt=Math.min(.033f,(n-lastFrame)/1_000_000_000f);lastFrame=n;vx+=ax*58*dt;vy+=ay*58*dt;vx*=.992f;vy*=.992f;ballX+=vx;ballY+=vy;float rad=20;if(ballX<L+rad){ballX=L+rad;vx*=-.6f;}if(ballX>R-rad){ballX=R-rad;vx*=-.6f;}if(ballY<T+rad){ballY=T+rad;vy*=-.6f;}if(ballY>B-rad){ballY=B-rad;vy*=-.6f;}float tx=getWidth()*.78f,ty=getHeight()*.31f;p.setColor(C("#ffd45b"));p.setStyle(Paint.Style.FILL);c.drawCircle(tx,ty,33,p);txt(c,"★",tx,ty+10,27,C("#795b15"),Paint.Align.CENTER);p.setColor(C("#5a476f"));c.drawCircle(ballX,ballY,rad,p);p.setColor(Color.WHITE);c.drawCircle(ballX-6,ballY-4,3,p);c.drawCircle(ballX+6,ballY-4,3,p);txt(c,"Tilt the phone. Keep the screen upright.",getWidth()/2f,getHeight()*.86f,13,C("#536075"),Paint.Align.CENTER);if(Math.hypot(ballX-tx,ballY-ty)<28){flash("NICE TILT!");next();}}
-    private void r3(Canvas c){bg(c);title(c,"ROOM 03","Something is hiding in there.");float bx=getWidth()*.5f,by=getHeight()*.54f;if(balloonHold>0&&!balloonPopped){float t=Math.min(1,(System.currentTimeMillis()-balloonHold)/1600f);balloonR=46+40*t;if(t>=1){balloonPopped=true;balloonHold=0;flash("POP!");}}
-        if(!balloonPopped){p.setStyle(Paint.Style.FILL);p.setColor(C("#ff6f91"));c.drawOval(bx-balloonR*.86f,by-balloonR,bx+balloonR*.86f,by+balloonR,p);p.setColor(Color.WHITE);c.drawCircle(bx-13,by-8,5,p);c.drawCircle(bx+13,by-8,5,p);txt(c,"KEY",bx,by+13,15,C("#7e3150"),Paint.Align.CENTER);}else{txt(c,"KEY",bx,by+18,38,C("#ffd45b"),Paint.Align.CENTER);if(System.currentTimeMillis()-roomStart>700)next();}
-        txt(c,"Tapping only makes it wobble.",getWidth()/2f,getHeight()*.82f,13,C("#536075"),Paint.Align.CENTER);
+    public void onResumeGame(){ if(accel!=null) sm.registerListener(this, accel, SensorManager.SENSOR_DELAY_GAME); lastFrame=System.nanoTime(); invalidate(); }
+    public void onPauseGame(){ sm.unregisterListener(this); }
+
+    @Override public void onSensorChanged(SensorEvent e){
+        if(e.sensor.getType()!=Sensor.TYPE_ACCELEROMETER) return;
+        lastAx=ax; lastAy=ay; lastAz=az;
+        ax=-e.values[0]; ay=e.values[1]; az=e.values[2];
+        float delta=Math.abs(ax-lastAx)+Math.abs(ay-lastAy)+Math.abs(az-lastAz);
+        if(delta < 0.45f) stillScore=Math.min(10,stillScore+0.08f); else stillScore=Math.max(0,stillScore-0.35f);
+        float mag=(float)Math.sqrt(ax*ax+ay*ay+az*az);
+        long now=System.currentTimeMillis();
+        if(Math.abs(mag-9.81f)>4.5f && now-lastShake>280){ shakeCount++; lastShake=now; }
     }
-    private void r4(Canvas c){bg(c);title(c,"ROOM 04","The room is listening to your patience.");door(c,getWidth()*.5f,getHeight()*.48f,getWidth()*.34f,getHeight()*.36f);long e=System.currentTimeMillis()-calmStart;int rem=Math.max(0,7-(int)(e/1000));p.setColor(C("#fff5d6"));p.setStyle(Paint.Style.FILL);c.drawCircle(getWidth()*.5f,getHeight()*.72f,55,p);txt(c,rem>0?String.valueOf(rem):"…",getWidth()*.5f,getHeight()*.735f,36,C("#3b4058"),Paint.Align.CENTER);if(calmResets>0)txt(c,"Oops. Touching restarted the room.",getWidth()/2f,getHeight()*.86f,13,C("#b85d50"),Paint.Align.CENTER);if(e>=7000){flash("PATIENCE WINS!");next();}}
-    private void r5(Canvas c){bg(c);title(c,"ROOM 05","The sun knows the order.");float[] xs={.24f,.43f,.62f,.81f};float[] hs={78,48,100,62};int[] cols={C("#ef6b61"),C("#5bbca8"),C("#7c6fe3"),C("#f3a94c")};p.setColor(C("#ffd45b"));p.setStyle(Paint.Style.FILL);c.drawCircle(getWidth()*.11f,getHeight()*.30f,31,p);txt(c,"SUN",getWidth()*.11f,getHeight()*.31f,12,C("#8f6b17"),Paint.Align.CENTER);for(int i=0;i<4;i++){float x=getWidth()*xs[i],base=getHeight()*.68f,h=hs[i],sh=44+h*.78f;p.setColor(Color.argb(50,73,88,88));c.drawOval(x+sh*.15f,base-8,x+sh*1.25f,base+20,p);rr(c,x-27,base-h,54,h,20,cols[i]);p.setColor(Color.WHITE);c.drawCircle(x-9,base-h+23,4,p);c.drawCircle(x+9,base-h+23,4,p);}txt(c,"Tap from the shortest shadow to the longest.",getWidth()/2f,getHeight()*.81f,13,C("#536075"),Paint.Align.CENTER);txt(c,shadowPos+"/4",getWidth()/2f,getHeight()*.87f,14,C("#536075"),Paint.Align.CENTER);}
-    private void r6(Canvas c){bg(c);title(c,"ROOM 06","This lock has trust issues.");door(c,getWidth()*.5f,getHeight()*.49f,getWidth()*.46f,getHeight()*.46f);float[][] eyes={{getWidth()*.39f,getHeight()*.43f},{getWidth()*.61f,getHeight()*.43f},{getWidth()*.50f,getHeight()*.57f}};int active=0;for(int i=0;i<3;i++){boolean covered=false;for(int k=0;k<lastPointerCount;k++){if(Math.hypot(lastPX[k]-eyes[i][0],lastPY[k]-eyes[i][1])<42)covered=true;}if(covered)active++;p.setColor(covered?C("#ffd45b"):Color.WHITE);p.setStyle(Paint.Style.FILL);c.drawOval(eyes[i][0]-31,eyes[i][1]-22,eyes[i][0]+31,eyes[i][1]+22,p);p.setColor(C("#3b4058"));c.drawCircle(eyes[i][0],eyes[i][1],covered?5:10,p);}txt(c,"Cover all three eyes at once.",getWidth()/2f,getHeight()*.81f,13,C("#536075"),Paint.Align.CENTER);if(active==3){flash("IT CAN'T SEE YOU!");next();}}
-    private void finish(Canvas c){bg(c);rr(c,getWidth()*.09f,getHeight()*.24f,getWidth()*.82f,getHeight()*.45f,32,C("#fff5d6"));txt(c,"BETA COMPLETE!",getWidth()/2f,getHeight()*.34f,34,C("#3b4058"),Paint.Align.CENTER);txt(c,"6 / 6 rooms escaped",getWidth()/2f,getHeight()*.40f,18,C("#ef6b61"),Paint.Align.CENTER);txt(c,"Which room made you smile?",getWidth()/2f,getHeight()*.48f,16,C("#6d748a"),Paint.Align.CENTER);button(c,"PLAY AGAIN",getWidth()*.20f,getHeight()*.58f,getWidth()*.60f,62);}
+    @Override public void onAccuracyChanged(Sensor sensor,int accuracy){}
 
-    private int lastPointerCount=0; private final float[] lastPX=new float[10], lastPY=new float[10];
-    private void cachePointers(MotionEvent e){lastPointerCount=Math.min(10,e.getPointerCount());for(int i=0;i<lastPointerCount;i++){lastPX[i]=e.getX(i);lastPY[i]=e.getY(i);}}
-    @Override public boolean onTouchEvent(MotionEvent e){cachePointers(e);int a=e.getActionMasked();float x=e.getX(e.getActionIndex()),y=e.getY(e.getActionIndex());
-        if(screen==0&&a==MotionEvent.ACTION_DOWN){if(y>getHeight()*.60f)next();return true;}
-        if(screen==1){if(e.getPointerCount()>=2){float dx=e.getX(0)-e.getX(1),dy=e.getY(0)-e.getY(1),d=(float)Math.hypot(dx,dy);if(a==MotionEvent.ACTION_POINTER_DOWN){pinchStart=d;keyScaleStart=keyScale;}else if(a==MotionEvent.ACTION_MOVE&&pinchStart>0){keyScale=Math.max(.30f,Math.min(1.2f,keyScaleStart*d/pinchStart));}}else{if(a==MotionEvent.ACTION_DOWN&&Math.hypot(x-keyX,y-keyY)<120){keyDrag=true;keyDX=x-keyX;keyDY=y-keyY;}if(a==MotionEvent.ACTION_MOVE&&keyDrag){keyX=x-keyDX;keyY=y-keyDY;}if(a==MotionEvent.ACTION_UP||a==MotionEvent.ACTION_CANCEL)keyDrag=false;}return true;}
-        if(screen==2&&a==MotionEvent.ACTION_DOWN){flash("Use gravity, not your finger.");return true;}
-        if(screen==3){float bx=getWidth()*.5f,by=getHeight()*.54f;if(a==MotionEvent.ACTION_DOWN&&Math.hypot(x-bx,y-by)<balloonR+35)balloonHold=System.currentTimeMillis();if(a==MotionEvent.ACTION_UP||a==MotionEvent.ACTION_CANCEL){if(!balloonPopped){balloonHold=0;balloonR=46;flash("Hold it...");}}return true;}
-        if(screen==4&&a==MotionEvent.ACTION_DOWN){calmResets++;calmStart=System.currentTimeMillis();flash("RESET");return true;}
-        if(screen==5&&a==MotionEvent.ACTION_DOWN){float[] xs={.24f,.43f,.62f,.81f};int hit=-1;for(int i=0;i<4;i++)if(Math.hypot(x-getWidth()*xs[i],y-getHeight()*.61f)<60)hit=i;if(hit>=0){if(hit==shadowTarget[shadowPos]){shadowPos++;flash("OK!");if(shadowPos==4)next();}else{shadowPos=0;flash("TRY AGAIN");}}return true;}
-        if(screen==6){invalidate();return true;}
-        if(screen==7&&a==MotionEvent.ACTION_DOWN){screen=0;invalidate();return true;}return true;}
+    private int C(String h){ return Color.parseColor(h); }
+    private float sp(float v){ return v*scaledDensity; }
+    private float dp(float v){ return v*density; }
+
+    private void txt(Canvas c,String s,float x,float y,float size,int col,Paint.Align align){
+        p.setStyle(Paint.Style.FILL); p.setTypeface(Typeface.create("sans",Typeface.BOLD)); p.setTextSize(sp(size)); p.setColor(col); p.setTextAlign(align); c.drawText(s,x,y,p);
+    }
+    private void mangaTxt(Canvas c,String s,float x,float y,float size,int col,Paint.Align align){
+        p.setStyle(Paint.Style.FILL); p.setTypeface(Typeface.create("sans-serif-black",Typeface.BOLD)); p.setTextSize(sp(size)); p.setColor(col); p.setTextAlign(align); c.drawText(s,x,y,p);
+    }
+    private void rr(Canvas c,float x,float y,float w,float h,float r,int col){ p.setStyle(Paint.Style.FILL); p.setColor(col); c.drawRoundRect(x,y,x+w,y+h,r,r,p); }
+    private boolean in(float x,float y,float l,float t,float r,float b){ return x>=l&&x<=r&&y>=t&&y<=b; }
+
+    private void wrap(Canvas c,String text,float cx,float top,float maxW,float size,int col){
+        p.setTypeface(Typeface.create("sans",Typeface.BOLD)); p.setTextSize(sp(size)); p.setTextAlign(Paint.Align.CENTER); p.setColor(col);
+        String[] words=text.split(" "); String line=""; float y=top;
+        for(String w:words){ String test=line.isEmpty()?w:line+" "+w; if(p.measureText(test)>maxW && !line.isEmpty()){ c.drawText(line,cx,y,p); y+=sp(size*1.32f); line=w; } else line=test; }
+        if(!line.isEmpty()) c.drawText(line,cx,y,p);
+    }
+
+    private void speedBg(Canvas c){
+        c.drawColor(C("#FFF3D8"));
+        p.setColor(C("#F6C95C")); p.setStrokeWidth(dp(2)); p.setStyle(Paint.Style.STROKE);
+        float cx=getWidth()/2f, cy=getHeight()*.53f;
+        for(int i=0;i<28;i++){ double a=i*Math.PI*2/28.0; float x1=cx+(float)Math.cos(a)*getWidth()*.28f; float y1=cy+(float)Math.sin(a)*getHeight()*.18f; float x2=cx+(float)Math.cos(a)*getWidth()*.72f; float y2=cy+(float)Math.sin(a)*getHeight()*.52f; c.drawLine(x1,y1,x2,y2,p); }
+        p.setStyle(Paint.Style.FILL); p.setColor(C("#F8E6B9")); c.drawCircle(cx,cy,getWidth()*.34f,p);
+    }
+
+    private void header(Canvas c,String subtitle){
+        rr(c,getWidth()*.04f,getHeight()*.025f,getWidth()*.92f,getHeight()*.13f,dp(18),Color.WHITE);
+        p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(dp(3)); p.setColor(C("#24243A")); c.drawRoundRect(getWidth()*.04f,getHeight()*.025f,getWidth()*.96f,getHeight()*.155f,dp(18),dp(18),p);
+        mangaTxt(c,"#"+screen+"  "+levelNames[screen],getWidth()*.075f,getHeight()*.077f,22,C("#24243A"),Paint.Align.LEFT);
+        wrap(c,subtitle,getWidth()/2f,getHeight()*.122f,getWidth()*.79f,16,C("#55566D"));
+        // hint button
+        rr(c,getWidth()*.79f,getHeight()*.17f,getWidth()*.17f,dp(44),dp(14),C("#FF6C7A"));
+        mangaTxt(c,"HINT "+hints,getWidth()*.875f,getHeight()*.17f+dp(29),14,Color.WHITE,Paint.Align.CENTER);
+    }
+
+    private void chibi(Canvas c,float x,float y,float scale,boolean lookLeft,boolean angry){
+        p.setStyle(Paint.Style.FILL); p.setColor(C("#F7C7A7")); c.drawCircle(x,y,dp(42)*scale,p);
+        p.setColor(C("#25223A")); c.drawArc(x-dp(45)*scale,y-dp(48)*scale,x+dp(45)*scale,y+dp(12)*scale,180,180,true,p);
+        float eyeY=y-dp(4)*scale; float off=lookLeft?-dp(6)*scale:dp(6)*scale;
+        p.setColor(Color.WHITE); c.drawOval(x-dp(25)*scale,eyeY-dp(10)*scale,x-dp(3)*scale,eyeY+dp(10)*scale,p); c.drawOval(x+dp(3)*scale,eyeY-dp(10)*scale,x+dp(25)*scale,eyeY+dp(10)*scale,p);
+        p.setColor(C("#25223A")); c.drawCircle(x-dp(14)*scale+off,eyeY,dp(5)*scale,p); c.drawCircle(x+dp(14)*scale+off,eyeY,dp(5)*scale,p);
+        p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(dp(3)*scale); p.setColor(C("#7B3145")); if(angry) c.drawLine(x-dp(14)*scale,y+dp(18)*scale,x+dp(14)*scale,y+dp(9)*scale,p); else c.drawArc(x-dp(15)*scale,y+dp(5)*scale,x+dp(15)*scale,y+dp(25)*scale,0,180,false,p);
+    }
+
+    private void speech(Canvas c,String s,float x,float y,float w,float h){
+        rr(c,x,y,w,h,dp(20),Color.WHITE); p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(dp(3)); p.setColor(C("#24243A")); c.drawRoundRect(x,y,x+w,y+h,dp(20),dp(20),p);
+        Path t=new Path(); t.moveTo(x+w*.32f,y+h); t.lineTo(x+w*.43f,y+h); t.lineTo(x+w*.35f,y+h+dp(22)); t.close(); p.setStyle(Paint.Style.FILL); p.setColor(Color.WHITE); c.drawPath(t,p); p.setStyle(Paint.Style.STROKE); p.setColor(C("#24243A")); c.drawPath(t,p);
+        wrap(c,s,x+w/2,y+dp(31),w-dp(24),16,C("#24243A"));
+    }
+
+    private void showToast(String s){ toast=s; toastUntil=System.currentTimeMillis()+900; }
+    private void useHint(){
+        if(screen<1||screen>25) return;
+        if(hints<=0){ showToast("No hints left — shop comes later!"); return; }
+        hints--; prefs.edit().putInt("hints",hints).apply(); showToast(hintsText[screen]);
+    }
+
+    private void gotoLevel(int n){
+        screen=n; roomStart=System.currentTimeMillis(); toast=""; shakeCount=0; stillScore=0; resetLevel(); invalidate();
+    }
+    private void solved(){
+        prefs.edit().putBoolean("level_"+screen,true).putLong("time_"+screen,System.currentTimeMillis()-roomStart).apply();
+        showToast("CLEAR!  ✦");
+        int n=screen+1; if(n>25){ screen=99; } else { screen=n; roomStart=System.currentTimeMillis(); resetLevel(); }
+    }
+
+    private void resetLevel(){
+        pointerCount=0; downAt=0;
+        keyX=getWidth()*.50f; keyY=getHeight()*.66f; keyScale=1f; keyDrag=false; pinchStart=0;
+        resetBall();
+        balloonHold=0; balloonR=dp(48); balloonPopped=false;
+        calmStart=System.currentTimeMillis(); liarChoice=-1; shakeDropped=false; fallY=getHeight()*.30f;
+        knockCount=0; lastKnock=0; bothHoldStart=0;
+        stickerX=getWidth()*.63f; stickerY=getHeight()*.46f; stickerDrag=false;
+        slashDone=false; stillStart=0; rotatePhase=0; doorScale=1; doorPinchStart=0;
+        bubbleX=getWidth()*.24f; bubbleY=getHeight()*.38f; bubbleDrag=false;
+        blueX=getWidth()*.30f; blueY=getHeight()*.62f; yellowX=getWidth()*.70f; yellowY=getHeight()*.62f; orbDrag=0; greenMade=false;
+        memoryPhase=0; memoryPos=0; memoryShownAt=System.currentTimeMillis(); code="";
+        titleCardX=getWidth()*.50f; titleCardY=getHeight()*.24f; titleDrag=false;
+        oppositeChoice=-1; gatePressed=false; mirrorSolved=false;
+        bossPhase=0; bossSealRevealed=false; bossBothStart=0;
+    }
+    private void resetBall(){ ballX=getWidth()*.18f; ballY=getHeight()*.70f; vx=vy=0; lastFrame=System.nanoTime(); }
+
+    @Override protected void onDraw(Canvas c){
+        super.onDraw(c);
+        if(screen==0) drawHome(c); else if(screen==90) drawLevelSelect(c); else if(screen==99) drawFinish(c); else drawLevel(c);
+        if(!toast.isEmpty() && System.currentTimeMillis()<toastUntil){ rr(c,getWidth()*.08f,getHeight()*.86f,getWidth()*.84f,dp(72),dp(18),C("#24243A")); wrap(c,toast,getWidth()/2f,getHeight()*.86f+dp(30),getWidth()*.76f,16,Color.WHITE); }
+        postInvalidateOnAnimation();
+    }
+
+    private void drawHome(Canvas c){
+        speedBg(c);
+        mangaTxt(c,"NO RULES!",getWidth()/2f,getHeight()*.20f,44,C("#24243A"),Paint.Align.CENTER);
+        mangaTxt(c,"MANGA TEST BUILD",getWidth()/2f,getHeight()*.255f,19,C("#E94C67"),Paint.Align.CENTER);
+        chibi(c,getWidth()*.50f,getHeight()*.41f,1.4f,false,false);
+        speech(c,"25 rooms. The phone is part of the puzzle.",getWidth()*.12f,getHeight()*.52f,getWidth()*.76f,dp(105));
+        button(c,"PLAY",getWidth()*.18f,getHeight()*.70f,getWidth()*.64f,dp(66),C("#FFCA4B"));
+        button(c,"LEVEL SELECT",getWidth()*.18f,getHeight()*.79f,getWidth()*.64f,dp(60),C("#7CD6C1"));
+    }
+    private void button(Canvas c,String s,float x,float y,float w,float h,int col){ rr(c,x,y,w,h,dp(18),col); p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(dp(3)); p.setColor(C("#24243A")); c.drawRoundRect(x,y,x+w,y+h,dp(18),dp(18),p); mangaTxt(c,s,x+w/2,y+h*.64f,18,C("#24243A"),Paint.Align.CENTER); }
+
+    private void drawLevelSelect(Canvas c){
+        c.drawColor(C("#FFF3D8")); mangaTxt(c,"TEST LEVELS",getWidth()/2f,getHeight()*.07f,28,C("#24243A"),Paint.Align.CENTER);
+        int cols=5; float gap=dp(8); float cell=(getWidth()-dp(32)-gap*(cols-1))/cols; float top=getHeight()*.12f;
+        for(int i=1;i<=25;i++){ int row=(i-1)/cols,col=(i-1)%cols; float x=dp(16)+col*(cell+gap), y=top+row*(cell+gap); int color=prefs.getBoolean("level_"+i,false)?C("#7CD6C1"):Color.WHITE; rr(c,x,y,cell,cell,dp(14),color); p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(dp(2)); p.setColor(C("#24243A")); c.drawRoundRect(x,y,x+cell,y+cell,dp(14),dp(14),p); mangaTxt(c,String.valueOf(i),x+cell/2,y+cell*.60f,18,C("#24243A"),Paint.Align.CENTER); }
+        button(c,"BACK",getWidth()*.30f,getHeight()*.86f,getWidth()*.40f,dp(58),C("#FFCA4B"));
+    }
+
+    private void drawFinish(Canvas c){
+        speedBg(c); mangaTxt(c,"25 / 25!",getWidth()/2f,getHeight()*.25f,42,C("#24243A"),Paint.Align.CENTER); mangaTxt(c,"TEST COMPLETE",getWidth()/2f,getHeight()*.32f,25,C("#E94C67"),Paint.Align.CENTER); chibi(c,getWidth()*.50f,getHeight()*.49f,1.5f,false,false); wrap(c,"Now we test: which rooms are fun, confusing, too easy, or impossible?",getWidth()/2f,getHeight()*.64f,getWidth()*.78f,18,C("#55566D")); button(c,"LEVEL SELECT",getWidth()*.18f,getHeight()*.79f,getWidth()*.64f,dp(62),C("#7CD6C1"));
+    }
+
+    private void drawLevel(Canvas c){
+        speedBg(c);
+        switch(screen){
+            case 1: l1(c); break; case 2:l2(c);break; case 3:l3(c);break; case 4:l4(c);break; case 5:l5(c);break;
+            case 6:l6(c);break; case 7:l7(c);break; case 8:l8(c);break; case 9:l9(c);break; case 10:l10(c);break;
+            case 11:l11(c);break; case 12:l12(c);break; case 13:l13(c);break; case 14:l14(c);break; case 15:l15(c);break;
+            case 16:l16(c);break; case 17:l17(c);break; case 18:l18(c);break; case 19:l19(c);break; case 20:l20(c);break;
+            case 21:l21(c);break; case 22:l22(c);break; case 23:l23(c);break; case 24:l24(c);break; case 25:l25(c);break;
+        }
+    }
+
+    private void door(Canvas c,float x,float y,float w,float h){ rr(c,x-w/2,y-h/2,w,h,dp(18),C("#7556C9")); p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(dp(4)); p.setColor(C("#24243A")); c.drawRoundRect(x-w/2,y-h/2,x+w/2,y+h/2,dp(18),dp(18),p); p.setStyle(Paint.Style.FILL); p.setColor(C("#FFCA4B")); c.drawCircle(x+w*.30f,y,dp(8),p); }
+
+    private void l1(Canvas c){ header(c,"That key is ridiculously dramatic."); door(c,getWidth()*.5f,getHeight()*.42f,getWidth()*.30f,getHeight()*.28f); c.save(); c.translate(keyX,keyY); c.scale(keyScale,keyScale); p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(dp(16));p.setStrokeCap(Paint.Cap.ROUND);p.setColor(C("#FFCA4B"));c.drawCircle(-dp(34),0,dp(23),p);c.drawLine(-dp(10),0,dp(64),0,p);c.drawLine(dp(64),0,dp(64),dp(19),p);p.setStrokeCap(Paint.Cap.BUTT);c.restore(); wrap(c,"Pinch + drag",getWidth()/2f,getHeight()*.82f,getWidth()*.75f,18,C("#55566D")); if(keyScale<.48f&&Math.hypot(keyX-getWidth()*.5f,keyY-getHeight()*.42f)<dp(55)) solved(); }
+
+    private void l2(Canvas c){ header(c,"The floor is listening to gravity."); float L=getWidth()*.09f,R=getWidth()*.91f,T=getHeight()*.28f,B=getHeight()*.76f; rr(c,L,T,R-L,B-T,dp(22),Color.WHITE); long n=System.nanoTime();float dt=Math.min(.033f,(n-lastFrame)/1_000_000_000f);lastFrame=n;vx+=ax*55*dt;vy+=ay*55*dt;vx*=.992f;vy*=.992f;ballX+=vx;ballY+=vy;float rad=dp(17);if(ballX<L+rad){ballX=L+rad;vx*=-.55f;}if(ballX>R-rad){ballX=R-rad;vx*=-.55f;}if(ballY<T+rad){ballY=T+rad;vy*=-.55f;}if(ballY>B-rad){ballY=B-rad;vy*=-.55f;}float tx=getWidth()*.76f,ty=getHeight()*.35f;p.setColor(C("#FFCA4B"));p.setStyle(Paint.Style.FILL);c.drawCircle(tx,ty,dp(28),p);mangaTxt(c,"★",tx,ty+sp(9),24,C("#7D5A00"),Paint.Align.CENTER);p.setColor(C("#42405F"));c.drawCircle(ballX,ballY,rad,p); if(Math.hypot(ballX-tx,ballY-ty)<dp(26)) solved(); }
+
+    private void l3(Canvas c){ header(c,"The key is trapped inside a stubborn balloon."); float x=getWidth()*.5f,y=getHeight()*.53f;if(balloonHold>0&&!balloonPopped){float t=Math.min(1,(System.currentTimeMillis()-balloonHold)/1500f);balloonR=dp(48+38*t);if(t>=1){balloonPopped=true;showToast("BANG!!");}} if(!balloonPopped){p.setColor(C("#FF6C9B"));p.setStyle(Paint.Style.FILL);c.drawOval(x-balloonR*.82f,y-balloonR,x+balloonR*.82f,y+balloonR,p);mangaTxt(c,"KEY",x,y+sp(7),16,C("#772942"),Paint.Align.CENTER);}else{mangaTxt(c,"🔑",x,y+sp(20),44,C("#24243A"),Paint.Align.CENTER);if(System.currentTimeMillis()-roomStart>700) solved();} mangaTxt(c,"PRESS...",getWidth()/2f,getHeight()*.79f,22,C("#E94C67"),Paint.Align.CENTER); }
+
+    private void l4(Canvas c){ header(c,"The door hates needy players."); door(c,getWidth()*.5f,getHeight()*.49f,getWidth()*.38f,getHeight()*.36f); long e=System.currentTimeMillis()-calmStart; int rem=Math.max(0,7-(int)(e/1000)); mangaTxt(c,rem>0?String.valueOf(rem):"...",getWidth()/2f,getHeight()*.75f,38,C("#24243A"),Paint.Align.CENTER); if(e>=7000) solved(); }
+
+    private void l5(Canvas c){ header(c,"This little guy says: 'LEFT! Definitely LEFT!'"); chibi(c,getWidth()*.5f,getHeight()*.39f,1.3f,false,true); speech(c,"LEFT! TRUST ME!",getWidth()*.19f,getHeight()*.50f,getWidth()*.62f,dp(92)); button(c,"LEFT",getWidth()*.10f,getHeight()*.70f,getWidth()*.34f,dp(64),C("#FF8D7C")); button(c,"RIGHT",getWidth()*.56f,getHeight()*.70f,getWidth()*.34f,dp(64),C("#7CD6C1")); wrap(c,"His eyes might be more honest than his mouth.",getWidth()/2f,getHeight()*.84f,getWidth()*.82f,16,C("#55566D")); if(liarChoice==1) solved(); }
+
+    private void l6(Canvas c){ header(c,"Three eyes. Zero privacy."); float[][] eyes={{.30f,.48f},{.50f,.58f},{.70f,.48f}};int active=0;for(int i=0;i<3;i++){float ex=getWidth()*eyes[i][0],ey=getHeight()*eyes[i][1];boolean covered=false;for(int k=0;k<pointerCount;k++)if(Math.hypot(px[k]-ex,py[k]-ey)<dp(48))covered=true;if(covered)active++;p.setColor(covered?C("#FFCA4B"):Color.WHITE);p.setStyle(Paint.Style.FILL);c.drawOval(ex-dp(42),ey-dp(26),ex+dp(42),ey+dp(26),p);p.setColor(C("#24243A"));c.drawCircle(ex,ey,covered?dp(5):dp(12),p);} mangaTxt(c,"HIDE THEM",getWidth()/2f,getHeight()*.76f,24,C("#E94C67"),Paint.Align.CENTER); if(active==3) solved(); }
+
+    private void l7(Canvas c){ header(c,"The vending machine ate your key."); rr(c,getWidth()*.27f,getHeight()*.30f,getWidth()*.46f,getHeight()*.42f,dp(24),C("#77A7DD")); mangaTxt(c,"KEY",getWidth()*.5f,getHeight()*.42f,28,C("#FFCA4B"),Paint.Align.CENTER); mangaTxt(c,"ガタガタ!",getWidth()*.5f,getHeight()*.79f,28,C("#E94C67"),Paint.Align.CENTER); if(shakeCount>=3){shakeDropped=true;} if(shakeDropped){ mangaTxt(c,"🔑",getWidth()*.5f,getHeight()*.72f,38,C("#24243A"),Paint.Align.CENTER); if(System.currentTimeMillis()-roomStart>600) solved();} }
+
+    private void l8(Canvas c){ header(c,"The key is stuck to the ceiling."); door(c,getWidth()*.5f,getHeight()*.70f,getWidth()*.32f,getHeight()*.23f); mangaTxt(c,"🔑",getWidth()*.5f,fallY,38,C("#24243A"),Paint.Align.CENTER); boolean inverted=ay<-6.2f; if(inverted) fallY=Math.min(getHeight()*.68f,fallY+dp(8)); if(fallY>=getHeight()*.65f) solved(); }
+
+    private void l9(Canvas c){ header(c,"A sleeping ninja guards the door."); chibi(c,getWidth()*.5f,getHeight()*.48f,1.25f,false,false); mangaTxt(c,"Z Z Z",getWidth()*.68f,getHeight()*.36f,28,C("#6B65B5"),Paint.Align.CENTER); mangaTxt(c,"TOK  TOK  TOK",getWidth()/2f,getHeight()*.72f,26,C("#E94C67"),Paint.Align.CENTER); mangaTxt(c,knockCount+" / 3",getWidth()/2f,getHeight()*.80f,20,C("#24243A"),Paint.Align.CENTER); if(knockCount>=3) solved(); }
+
+    private void l10(Canvas c){ header(c,"The seals only trust teamwork."); float y=getHeight()*.52f;seal(c,getWidth()*.32f,y,"A");seal(c,getWidth()*.68f,y,"B");boolean a=false,b=false;for(int i=0;i<pointerCount;i++){if(Math.hypot(px[i]-getWidth()*.32f,py[i]-y)<dp(60))a=true;if(Math.hypot(px[i]-getWidth()*.68f,py[i]-y)<dp(60))b=true;}if(a&&b){if(bothHoldStart==0)bothHoldStart=System.currentTimeMillis();if(System.currentTimeMillis()-bothHoldStart>850)solved();}else bothHoldStart=0;mangaTxt(c,"HOLD BOTH",getWidth()/2f,getHeight()*.75f,24,C("#E94C67"),Paint.Align.CENTER); }
+    private void seal(Canvas c,float x,float y,String s){p.setStyle(Paint.Style.FILL);p.setColor(C("#E84D61"));c.drawCircle(x,y,dp(50),p);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(dp(5));p.setColor(C("#24243A"));c.drawCircle(x,y,dp(50),p);mangaTxt(c,s,x,y+sp(9),25,Color.WHITE,Paint.Align.CENTER);}
+
+    private void l11(Canvas c){ header(c,"Someone put a sticker over the important part."); door(c,getWidth()*.5f,getHeight()*.50f,getWidth()*.42f,getHeight()*.38f); mangaTxt(c,"OPEN",getWidth()*.5f,getHeight()*.51f,22,Color.WHITE,Paint.Align.CENTER); rr(c,stickerX-dp(75),stickerY-dp(50),dp(150),dp(100),dp(10),C("#FFCA4B")); mangaTxt(c,"SALE!",stickerX,stickerY+sp(9),24,C("#24243A"),Paint.Align.CENTER); if(stickerX<0||stickerX>getWidth()||stickerY<0||stickerY>getHeight()) solved(); }
+
+    private void l12(Canvas c){ header(c,"One clean samurai slash."); chibi(c,getWidth()*.28f,getHeight()*.55f,1.0f,false,false);p.setColor(C("#24243A"));p.setStrokeWidth(dp(6));p.setStyle(Paint.Style.STROKE);c.drawLine(getWidth()*.38f,getHeight()*.68f,getWidth()*.76f,getHeight()*.36f,p);mangaTxt(c,"シュッ!",getWidth()*.70f,getHeight()*.68f,28,C("#E94C67"),Paint.Align.CENTER); if(slashDone) solved(); }
+
+    private void l13(Canvas c){ header(c,"The manga librarian demands TOTAL SILENCE."); chibi(c,getWidth()*.5f,getHeight()*.46f,1.25f,false,true); mangaTxt(c,"SHHH!!",getWidth()/2f,getHeight()*.66f,34,C("#E94C67"),Paint.Align.CENTER); int vol=audio.getStreamVolume(AudioManager.STREAM_MUSIC); int max=audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC); wrap(c,"Media volume: "+vol+" / "+max,getWidth()/2f,getHeight()*.77f,getWidth()*.80f,18,C("#24243A")); if(vol==0) solved(); }
+
+    private void l14(Canvas c){ header(c,"Become a statue. Seriously."); chibi(c,getWidth()*.5f,getHeight()*.48f,1.45f,false,false); if(stillScore>2.5f){if(stillStart==0)stillStart=System.currentTimeMillis();}else stillStart=0; long t=stillStart==0?0:System.currentTimeMillis()-stillStart; mangaTxt(c,(t/1000)+" / 4",getWidth()/2f,getHeight()*.76f,28,C("#E94C67"),Paint.Align.CENTER); if(t>4000) solved(); }
+
+    private void l15(Canvas c){ header(c,"Lean LEFT... then RIGHT. Screen stays portrait."); mangaTxt(c,rotatePhase==0?"← LEFT":"RIGHT →",getWidth()/2f,getHeight()*.52f,38,C("#24243A"),Paint.Align.CENTER); if(rotatePhase==0&&ax<-6.0f)rotatePhase=1; if(rotatePhase==1&&ax>6.0f)solved(); }
+
+    private void l16(Canvas c){ header(c,"The door is too small for your ego."); c.save();c.translate(getWidth()*.5f,getHeight()*.52f);c.scale(doorScale,doorScale);door(c,0,0,getWidth()*.22f,getHeight()*.20f);c.restore();mangaTxt(c,"MAKE IT BIG",getWidth()/2f,getHeight()*.78f,24,C("#E94C67"),Paint.Align.CENTER); if(doorScale>2.25f) solved(); }
+
+    private void l17(Canvas c){ header(c,"Dialogue is blocking the evidence."); mangaTxt(c,"🔑",getWidth()*.50f,getHeight()*.48f,42,C("#24243A"),Paint.Align.CENTER); speech(c,"I am extremely important dialogue!",bubbleX,bubbleY,getWidth()*.56f,dp(120)); if(bubbleX>getWidth()*.78f||bubbleX+getWidth()*.56f<getWidth()*.20f||bubbleY>getHeight()*.72f) solved(); }
+
+    private void l18(Canvas c){ header(c,"The lock wants GREEN. You only have two colors."); orb(c,blueX,blueY,C("#4F8FEA"));orb(c,yellowX,yellowY,C("#FFCA4B"));float tx=getWidth()*.5f,ty=getHeight()*.38f;p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(dp(8));p.setColor(C("#4BAA78"));c.drawCircle(tx,ty,dp(42),p);if(Math.hypot(blueX-yellowX,blueY-yellowY)<dp(65)){greenMade=true;blueX=yellowX=(blueX+yellowX)/2;blueY=yellowY=(blueY+yellowY)/2;}if(greenMade){orb(c,blueX,blueY,C("#55B979"));if(Math.hypot(blueX-tx,blueY-ty)<dp(52))solved();}}
+    private void orb(Canvas c,float x,float y,int col){p.setStyle(Paint.Style.FILL);p.setColor(col);c.drawCircle(x,y,dp(42),p);p.setColor(Color.WHITE);c.drawCircle(x-dp(11),y-dp(10),dp(7),p);}
+
+    private void l19(Canvas c){ header(c,"Watch the faces. Then repeat them."); long now=System.currentTimeMillis(); if(memoryPhase==0&&now-memoryShownAt>2400)memoryPhase=1; float[] xs={.18f,.39f,.61f,.82f}; for(int i=0;i<4;i++){float x=getWidth()*xs[i],y=getHeight()*.55f;int col=C("#F7C7A7");p.setColor(col);p.setStyle(Paint.Style.FILL);c.drawCircle(x,y,dp(34),p);mangaTxt(c,new String[]{"😠","😴","😎","😱"}[i],x,y+sp(12),28,C("#24243A"),Paint.Align.CENTER);} if(memoryPhase==0){ mangaTxt(c,""+(memorySeq[0]+1)+"  "+(memorySeq[1]+1)+"  "+(memorySeq[2]+1)+"  "+(memorySeq[3]+1),getWidth()/2f,getHeight()*.72f,28,C("#E94C67"),Paint.Align.CENTER);}else mangaTxt(c,"YOUR TURN  "+memoryPos+"/4",getWidth()/2f,getHeight()*.72f,22,C("#E94C67"),Paint.Align.CENTER); }
+
+    private void l20(Canvas c){ header(c,"Cats, stars, swords. In that order."); mangaTxt(c,"🐱 🐱 🐱",getWidth()/2f,getHeight()*.30f,28,C("#24243A"),Paint.Align.CENTER);mangaTxt(c,"★ ★ ★ ★",getWidth()/2f,getHeight()*.38f,28,C("#FFB300"),Paint.Align.CENTER);mangaTxt(c,"⚔ ⚔",getWidth()/2f,getHeight()*.46f,28,C("#24243A"),Paint.Align.CENTER); drawKeypad(c);mangaTxt(c,code.isEmpty()?"_ _ _":code,getWidth()/2f,getHeight()*.56f,28,C("#E94C67"),Paint.Align.CENTER);if(code.equals("342"))solved();if(code.length()>=3&&!code.equals("342")){showToast("NOPE");code="";}}
+    private void drawKeypad(Canvas c){float top=getHeight()*.62f;int n=1;for(int r=0;r<3;r++)for(int col=0;col<3;col++){float x=getWidth()*.22f+col*getWidth()*.28f,y=top+r*dp(62);rr(c,x-dp(28),y-dp(24),dp(56),dp(48),dp(12),Color.WHITE);mangaTxt(c,String.valueOf(n++),x,y+sp(7),18,C("#24243A"),Paint.Align.CENTER);}}
+
+    private void l21(Canvas c){ header(c,"The interface thinks it is untouchable."); door(c,getWidth()*.5f,getHeight()*.62f,getWidth()*.42f,getHeight()*.30f);rr(c,titleCardX-getWidth()*.20f,titleCardY-dp(38),getWidth()*.40f,dp(76),dp(14),C("#FFCA4B"));mangaTxt(c,"ROOM 21",titleCardX,titleCardY+sp(8),20,C("#24243A"),Paint.Align.CENTER);wrap(c,"Drag the label somewhere useful.",getWidth()/2f,getHeight()*.82f,getWidth()*.80f,18,C("#55566D")); if(titleCardY>getHeight()*.58f&&Math.abs(titleCardX-getWidth()*.5f)<getWidth()*.18f)solved(); }
+
+    private void l22(Canvas c){ header(c,"He says: 'I ALWAYS LIE. Choose LEFT.'");chibi(c,getWidth()*.5f,getHeight()*.42f,1.25f,true,true);button(c,"LEFT",getWidth()*.10f,getHeight()*.68f,getWidth()*.34f,dp(64),C("#FF8D7C"));button(c,"RIGHT",getWidth()*.56f,getHeight()*.68f,getWidth()*.34f,dp(64),C("#7CD6C1"));if(oppositeChoice==1)solved(); }
+
+    private void l23(Canvas c){ header(c,"One finger opens the gate. Gravity does the rest.");float L=getWidth()*.08f,R=getWidth()*.92f,T=getHeight()*.30f,B=getHeight()*.74f;rr(c,L,T,R-L,B-T,dp(20),Color.WHITE);float gateX=getWidth()*.55f;p.setColor(C("#E94C67"));p.setStyle(Paint.Style.FILL);if(!gatePressed)c.drawRect(gateX,T,gateX+dp(14),B,p);button(c,"HOLD",getWidth()*.08f,getHeight()*.78f,getWidth()*.28f,dp(58),C("#FFCA4B"));long n=System.nanoTime();float dt=Math.min(.033f,(n-lastFrame)/1_000_000_000f);lastFrame=n;vx+=ax*50*dt;vy+=ay*50*dt;vx*=.992f;vy*=.992f;ballX+=vx;ballY+=vy;float r=dp(16);if(ballX<L+r)ballX=L+r;if(ballX>R-r)ballX=R-r;if(ballY<T+r)ballY=T+r;if(ballY>B-r)ballY=B-r;if(!gatePressed&&ballX>gateX-r&&ballX<gateX+dp(26)&&ballY>T&&ballY<B){ballX=gateX-r;vx*=-.5f;}p.setColor(C("#42405F"));c.drawCircle(ballX,ballY,r,p);float tx=getWidth()*.82f,ty=getHeight()*.38f;p.setColor(C("#55B979"));c.drawCircle(tx,ty,dp(25),p);if(Math.hypot(ballX-tx,ballY-ty)<dp(28))solved(); }
+
+    private void l24(Canvas c){ header(c,"The mirror shows →. What does reality do?");rr(c,getWidth()*.17f,getHeight()*.32f,getWidth()*.66f,getHeight()*.26f,dp(20),C("#DCEBFA"));mangaTxt(c,"→",getWidth()/2f,getHeight()*.50f,54,C("#24243A"),Paint.Align.CENTER);mangaTxt(c,"MIRROR",getWidth()/2f,getHeight()*.66f,22,C("#6B65B5"),Paint.Align.CENTER);if(mirrorSolved)solved(); }
+
+    private void l25(Canvas c){ header(c,"FINAL BOSS: three lessons, one room."); if(bossPhase==0){rr(c,getWidth()*.27f,getHeight()*.34f,getWidth()*.46f,getHeight()*.30f,dp(20),C("#77A7DD"));mangaTxt(c,"SHAKE",getWidth()/2f,getHeight()*.52f,30,C("#24243A"),Paint.Align.CENTER);if(shakeCount>=3){bossSealRevealed=true;bossPhase=1;showToast("SEALS REVEALED!");}} else if(bossPhase==1){float y=getHeight()*.50f;seal(c,getWidth()*.34f,y,"1");seal(c,getWidth()*.66f,y,"2");boolean a=false,b=false;for(int i=0;i<pointerCount;i++){if(Math.hypot(px[i]-getWidth()*.34f,py[i]-y)<dp(60))a=true;if(Math.hypot(px[i]-getWidth()*.66f,py[i]-y)<dp(60))b=true;}if(a&&b){if(bossBothStart==0)bossBothStart=System.currentTimeMillis();if(System.currentTimeMillis()-bossBothStart>800){bossPhase=2;resetBall();showToast("FINAL ORB!");}}else bossBothStart=0;} else {float tx=getWidth()*.5f,ty=getHeight()*.40f;long n=System.nanoTime();float dt=Math.min(.033f,(n-lastFrame)/1_000_000_000f);lastFrame=n;vx+=ax*55*dt;vy+=ay*55*dt;vx*=.992f;vy*=.992f;ballX+=vx;ballY+=vy;ballX=Math.max(dp(20),Math.min(getWidth()-dp(20),ballX));ballY=Math.max(getHeight()*.28f,Math.min(getHeight()*.78f,ballY));p.setColor(C("#FFCA4B"));c.drawCircle(tx,ty,dp(32),p);p.setColor(C("#42405F"));c.drawCircle(ballX,ballY,dp(18),p);if(Math.hypot(ballX-tx,ballY-ty)<dp(30))solved();} mangaTxt(c,"PHASE "+(bossPhase+1)+" / 3",getWidth()/2f,getHeight()*.78f,22,C("#E94C67"),Paint.Align.CENTER); }
+
+    private void cache(MotionEvent e){ pointerCount=Math.min(10,e.getPointerCount()); for(int i=0;i<pointerCount;i++){px[i]=e.getX(i);py[i]=e.getY(i);} }
+
+    @Override public boolean onTouchEvent(MotionEvent e){
+        cache(e); int a=e.getActionMasked(); int idx=e.getActionIndex(); float x=e.getX(idx),y=e.getY(idx);
+        if(a==MotionEvent.ACTION_DOWN){downX=x;downY=y;downAt=System.currentTimeMillis();}
+        if(screen==0){ if(a==MotionEvent.ACTION_DOWN&&in(x,y,getWidth()*.18f,getHeight()*.67f,getWidth()*.82f,getHeight()*.78f))gotoLevel(1); else if(a==MotionEvent.ACTION_DOWN&&in(x,y,getWidth()*.18f,getHeight()*.78f,getWidth()*.82f,getHeight()*.88f))screen=90; invalidate(); return true; }
+        if(screen==90){ if(a==MotionEvent.ACTION_DOWN){int cols=5;float gap=dp(8),cell=(getWidth()-dp(32)-gap*4)/5,top=getHeight()*.12f;for(int i=1;i<=25;i++){int row=(i-1)/5,col=(i-1)%5;float lx=dp(16)+col*(cell+gap),ty=top+row*(cell+gap);if(in(x,y,lx,ty,lx+cell,ty+cell)){gotoLevel(i);return true;}}if(y>getHeight()*.84f)screen=0;}invalidate();return true; }
+        if(screen==99){ if(a==MotionEvent.ACTION_DOWN){screen=90;invalidate();}return true; }
+        if(a==MotionEvent.ACTION_DOWN&&in(x,y,getWidth()*.77f,getHeight()*.15f,getWidth(),getHeight()*.24f)){useHint();return true;}
+
+        switch(screen){
+            case 1:
+                if(e.getPointerCount()>=2){float dx=e.getX(0)-e.getX(1),dy=e.getY(0)-e.getY(1),d=(float)Math.hypot(dx,dy);if(a==MotionEvent.ACTION_POINTER_DOWN){pinchStart=d;keyScaleStart=keyScale;}else if(a==MotionEvent.ACTION_MOVE&&pinchStart>0)keyScale=Math.max(.28f,Math.min(1.25f,keyScaleStart*d/pinchStart));}else{if(a==MotionEvent.ACTION_DOWN&&Math.hypot(x-keyX,y-keyY)<dp(130)){keyDrag=true;keyDX=x-keyX;keyDY=y-keyY;}if(a==MotionEvent.ACTION_MOVE&&keyDrag){keyX=x-keyDX;keyY=y-keyDY;}if(a==MotionEvent.ACTION_UP||a==MotionEvent.ACTION_CANCEL)keyDrag=false;}break;
+            case 2: if(a==MotionEvent.ACTION_DOWN)showToast("Hands off. Tilt!");break;
+            case 3: if(a==MotionEvent.ACTION_DOWN&&Math.hypot(x-getWidth()*.5f,y-getHeight()*.53f)<dp(90))balloonHold=System.currentTimeMillis();if(a==MotionEvent.ACTION_UP||a==MotionEvent.ACTION_CANCEL){if(!balloonPopped){balloonHold=0;balloonR=dp(48);showToast("Hold longer!");}}break;
+            case 4: if(a==MotionEvent.ACTION_DOWN){calmStart=System.currentTimeMillis();showToast("RESET! Stop touching.");}break;
+            case 5: if(a==MotionEvent.ACTION_DOWN&&y>getHeight()*.66f){liarChoice=x>getWidth()*.5f?1:0;if(liarChoice==0)showToast("He fooled you 😏");}break;
+            case 6: break;
+            case 7: break;
+            case 8: break;
+            case 9: if(a==MotionEvent.ACTION_DOWN){long now=System.currentTimeMillis();if(lastKnock==0||now-lastKnock<700){knockCount++;lastKnock=now;}else{knockCount=1;lastKnock=now;}}break;
+            case 10: break;
+            case 11: if(a==MotionEvent.ACTION_DOWN&&Math.hypot(x-stickerX,y-stickerY)<dp(100)){stickerDrag=true;keyDX=x-stickerX;keyDY=y-stickerY;}if(a==MotionEvent.ACTION_MOVE&&stickerDrag){stickerX=x-keyDX;stickerY=y-keyDY;}if(a==MotionEvent.ACTION_UP||a==MotionEvent.ACTION_CANCEL)stickerDrag=false;break;
+            case 12: if(a==MotionEvent.ACTION_UP){float dx=x-downX,dy=y-downY;if(dx>getWidth()*.28f&&dy<-getHeight()*.18f)slashDone=true;}break;
+            case 13: break;
+            case 14: if(a==MotionEvent.ACTION_DOWN)showToast("Even your finger moved it!");break;
+            case 15: break;
+            case 16: if(e.getPointerCount()>=2){float dx=e.getX(0)-e.getX(1),dy=e.getY(0)-e.getY(1),d=(float)Math.hypot(dx,dy);if(a==MotionEvent.ACTION_POINTER_DOWN){doorPinchStart=d;doorScaleStart=doorScale;}else if(a==MotionEvent.ACTION_MOVE&&doorPinchStart>0)doorScale=Math.max(.5f,Math.min(3f,doorScaleStart*d/doorPinchStart));}break;
+            case 17: float bw=getWidth()*.56f,bh=dp(120);if(a==MotionEvent.ACTION_DOWN&&in(x,y,bubbleX,bubbleY,bubbleX+bw,bubbleY+bh)){bubbleDrag=true;keyDX=x-bubbleX;keyDY=y-bubbleY;}if(a==MotionEvent.ACTION_MOVE&&bubbleDrag){bubbleX=x-keyDX;bubbleY=y-keyDY;}if(a==MotionEvent.ACTION_UP||a==MotionEvent.ACTION_CANCEL)bubbleDrag=false;break;
+            case 18: if(a==MotionEvent.ACTION_DOWN){if(Math.hypot(x-blueX,y-blueY)<dp(60))orbDrag=1;else if(Math.hypot(x-yellowX,y-yellowY)<dp(60))orbDrag=2;}if(a==MotionEvent.ACTION_MOVE){if(orbDrag==1){blueX=x;blueY=y;}if(orbDrag==2){yellowX=x;yellowY=y;}}if(a==MotionEvent.ACTION_UP)orbDrag=0;break;
+            case 19: if(memoryPhase==1&&a==MotionEvent.ACTION_DOWN){float[] xs={.18f,.39f,.61f,.82f};int hit=-1;for(int i=0;i<4;i++)if(Math.hypot(x-getWidth()*xs[i],y-getHeight()*.55f)<dp(48))hit=i;if(hit>=0){if(hit==memorySeq[memoryPos]){memoryPos++;if(memoryPos==4)solved();}else{showToast("Wrong face!");memoryPos=0;}}}break;
+            case 20: if(a==MotionEvent.ACTION_DOWN&&y>getHeight()*.58f){float top=getHeight()*.62f;for(int r=0;r<3;r++)for(int col=0;col<3;col++){float kx=getWidth()*.22f+col*getWidth()*.28f,ky=top+r*dp(62);if(Math.hypot(x-kx,y-ky)<dp(34)&&code.length()<3)code+=String.valueOf(r*3+col+1);}}break;
+            case 21: if(a==MotionEvent.ACTION_DOWN&&Math.hypot(x-titleCardX,y-titleCardY)<dp(110)){titleDrag=true;keyDX=x-titleCardX;keyDY=y-titleCardY;}if(a==MotionEvent.ACTION_MOVE&&titleDrag){titleCardX=x-keyDX;titleCardY=y-keyDY;}if(a==MotionEvent.ACTION_UP)titleDrag=false;break;
+            case 22: if(a==MotionEvent.ACTION_DOWN&&y>getHeight()*.64f){oppositeChoice=x>getWidth()*.5f?1:0;if(oppositeChoice==0)showToast("He said he lies!");}break;
+            case 23: gatePressed=false;for(int i=0;i<pointerCount;i++)if(in(px[i],py[i],getWidth()*.06f,getHeight()*.75f,getWidth()*.40f,getHeight()*.88f))gatePressed=true;break;
+            case 24: if(a==MotionEvent.ACTION_UP){float dx=x-downX;if(dx<-getWidth()*.25f)mirrorSolved=true;else if(Math.abs(dx)>getWidth()*.20f)showToast("Mirror it.");}break;
+            case 25: break;
+        }
+        invalidate(); return true;
+    }
 }
