@@ -1,31 +1,22 @@
-# NO RULES! — Beta 0.4 Manga Test Build
+# NO RULES — Beta 0.4.1
 
-Native Android puzzle prototype with **25 test levels**.
+25-level Android test build.
 
-## Test goals
-- Validate readability on real phones.
-- Identify puzzles that create a clean “aha!” moment versus confusion.
-- Measure which device interactions are reliable across Android hardware.
-- Find difficulty spikes and boring/easy levels before adding monetization.
-
-## Major changes from Beta 0.3
-- Larger phone-readable typography using Android scaled density.
-- Manga/chibi presentation: speech bubbles, speed lines, exaggerated reactions.
-- Removed the old shadow-order puzzle.
-- Expanded from 6 to 25 levels.
-- Added level select for rapid QA.
-- Added 3 test hints and per-level contextual hint text.
-- Stores completion status and solve time locally with SharedPreferences.
-- No real billing or ads in this test build.
-
-## Monetization scaffold (not active yet)
-Planned after testing:
-- 3 hints — €0.99
-- larger hint bundles
-- themed paid level packs
-- 100-level expansion / bundle
-- optional rewarded ads only as a limited alternative to buying hints
+## Changes in 0.4.1
+- Persistent MENU button on every puzzle.
+- Readability overhaul: Android default bold typeface, larger minimum text sizes, higher contrast.
+- Hints are now persistent modal cards and remain visible until CLOSE / × is pressed.
+- Reworked unclear puzzle logic, especially Room 21 and Room 22.
+- 25-level selector remains available for rapid testing.
+- No real billing or ads yet; monetization remains deferred until gameplay findings are collected.
 
 ## Build
-The included GitHub Actions workflow builds a debug APK on every push to `main`.
-Download the `NoRulesBeta-APK` artifact from a successful run.
+GitHub Actions builds the debug APK automatically on push to main.
+
+
+## Beta 0.4.3 — Screenshot puzzle
+Room 24 now uses Android 14+ ScreenCaptureCallback. The player must take a real device screenshot to solve the room. The app only receives a capture event; it does not receive or inspect the screenshot image.
+
+
+## New in 0.4.3
+Level 21 is now **SNOWMAN FACE**: drag two stones onto the eyes, the carrot onto the nose, and draw a curved smile with a finger. Hidden gag: bringing the carrot to the snowman's backside triggers the speech bubble `no, li no!`, blush, melting animation, and a full level reset.

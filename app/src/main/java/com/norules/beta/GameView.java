@@ -21,6 +21,7 @@ public class GameView extends View implements SensorEventListener {
     private String toast = "";
     private long toastUntil = 0;
     private int hints = 3;
+    private boolean hintOpen = false;
 
     // sensors
     private float ax, ay, az;
@@ -84,15 +85,19 @@ public class GameView extends View implements SensorEventListener {
     private final int[] memorySeq = {2,0,3,1};
     // L20
     private String code = "";
-    // L21
-    private float titleCardX, titleCardY;
-    private boolean titleDrag;
+    // L21 - Snowman face
+    private float carrotX, carrotY, stone1X, stone1Y, stone2X, stone2Y;
+    private int snowDrag = 0; // 1 carrot, 2/3 stones
+    private boolean snowEye1, snowEye2, snowNose, snowSmile, drawingSmile;
+    private final ArrayList<PointF> snowSmilePoints = new ArrayList<>();
+    private int snowEasterPhase = 0; // 0 normal, 1 warning/blush, 2 melting
+    private long snowEasterAt = 0;
     // L22
     private int oppositeChoice = -1;
     // L23
     private boolean gatePressed;
     // L24
-    private boolean mirrorSolved;
+    private boolean screenshotCaptured;
     // L25 boss
     private int bossPhase;
     private boolean bossSealRevealed;
@@ -103,7 +108,7 @@ public class GameView extends View implements SensorEventListener {
             "THREE EYES", "SHAKE IT", "UPSIDE DOWN", "KNOCK KNOCK", "TWO SEALS",
             "PEEL IT", "SAMURAI SLASH", "SHHH!", "STATUE MODE", "LEFT / RIGHT",
             "BIG DOOR", "MOVE THE BUBBLE", "COLOR FUSION", "MEMORY FACES", "COUNT IT",
-            "BREAK THE UI", "OPPOSITE DAY", "TILT + HOLD", "MIRROR TRICK", "BOSS ROOM"
+            "SNOWMAN FACE", "WRONG DOOR", "TILT + HOLD", "SCREENSHOT!", "BOSS ROOM"
     };
 
     private final String[] hintsText = {
@@ -128,10 +133,10 @@ public class GameView extends View implements SensorEventListener {
             "Blue + yellow has a useful result.",
             "Watch first. Tap later.",
             "Count cats, stars, then swords.",
-            "Not every piece of the interface has to stay in the interface.",
-            "He tells you he lies. Believe that part.",
+            "Build his face: two stone eyes, carrot nose, then draw a curved smile with your finger.",
+            "He always chooses the wrong door. Do the opposite of his choice.",
             "One hand opens the gate. The other controls gravity.",
-            "A mirror reverses directions.",
+            "Do not touch the key. Capture this moment with the phone itself.",
             "The boss combines things you already learned."
     };
 
@@ -168,18 +173,18 @@ public class GameView extends View implements SensorEventListener {
     private float dp(float v){ return v*density; }
 
     private void txt(Canvas c,String s,float x,float y,float size,int col,Paint.Align align){
-        p.setStyle(Paint.Style.FILL); p.setTypeface(Typeface.create("sans",Typeface.BOLD)); p.setTextSize(sp(size)); p.setColor(col); p.setTextAlign(align); c.drawText(s,x,y,p);
+        p.setStyle(Paint.Style.FILL); p.setTypeface(Typeface.DEFAULT_BOLD); p.setTextSize(sp(Math.max(size,17))); p.setColor(col); p.setTextAlign(align); c.drawText(s,x,y,p);
     }
     private void mangaTxt(Canvas c,String s,float x,float y,float size,int col,Paint.Align align){
-        p.setStyle(Paint.Style.FILL); p.setTypeface(Typeface.create("sans-serif-black",Typeface.BOLD)); p.setTextSize(sp(size)); p.setColor(col); p.setTextAlign(align); c.drawText(s,x,y,p);
+        p.setStyle(Paint.Style.FILL); p.setTypeface(Typeface.DEFAULT_BOLD); p.setTextSize(sp(Math.max(size,18))); p.setColor(col); p.setTextAlign(align); c.drawText(s,x,y,p);
     }
     private void rr(Canvas c,float x,float y,float w,float h,float r,int col){ p.setStyle(Paint.Style.FILL); p.setColor(col); c.drawRoundRect(x,y,x+w,y+h,r,r,p); }
     private boolean in(float x,float y,float l,float t,float r,float b){ return x>=l&&x<=r&&y>=t&&y<=b; }
 
     private void wrap(Canvas c,String text,float cx,float top,float maxW,float size,int col){
-        p.setTypeface(Typeface.create("sans",Typeface.BOLD)); p.setTextSize(sp(size)); p.setTextAlign(Paint.Align.CENTER); p.setColor(col);
+        p.setTypeface(Typeface.DEFAULT_BOLD); float readable=Math.max(size,18); p.setTextSize(sp(readable)); p.setTextAlign(Paint.Align.CENTER); p.setColor(col);
         String[] words=text.split(" "); String line=""; float y=top;
-        for(String w:words){ String test=line.isEmpty()?w:line+" "+w; if(p.measureText(test)>maxW && !line.isEmpty()){ c.drawText(line,cx,y,p); y+=sp(size*1.32f); line=w; } else line=test; }
+        for(String w:words){ String test=line.isEmpty()?w:line+" "+w; if(p.measureText(test)>maxW && !line.isEmpty()){ c.drawText(line,cx,y,p); y+=sp(readable*1.34f); line=w; } else line=test; }
         if(!line.isEmpty()) c.drawText(line,cx,y,p);
     }
 
@@ -192,13 +197,13 @@ public class GameView extends View implements SensorEventListener {
     }
 
     private void header(Canvas c,String subtitle){
-        rr(c,getWidth()*.04f,getHeight()*.025f,getWidth()*.92f,getHeight()*.13f,dp(18),Color.WHITE);
-        p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(dp(3)); p.setColor(C("#24243A")); c.drawRoundRect(getWidth()*.04f,getHeight()*.025f,getWidth()*.96f,getHeight()*.155f,dp(18),dp(18),p);
-        mangaTxt(c,"#"+screen+"  "+levelNames[screen],getWidth()*.075f,getHeight()*.077f,22,C("#24243A"),Paint.Align.LEFT);
-        wrap(c,subtitle,getWidth()/2f,getHeight()*.122f,getWidth()*.79f,16,C("#55566D"));
-        // hint button
-        rr(c,getWidth()*.79f,getHeight()*.17f,getWidth()*.17f,dp(44),dp(14),C("#FF6C7A"));
-        mangaTxt(c,"HINT "+hints,getWidth()*.875f,getHeight()*.17f+dp(29),14,Color.WHITE,Paint.Align.CENTER);
+        rr(c,getWidth()*.035f,getHeight()*.018f,getWidth()*.93f,getHeight()*.155f,dp(18),Color.WHITE);
+        p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(dp(3)); p.setColor(C("#24243A"));
+        c.drawRoundRect(getWidth()*.035f,getHeight()*.018f,getWidth()*.965f,getHeight()*.173f,dp(18),dp(18),p);
+        mangaTxt(c,"#"+screen+"  "+levelNames[screen],getWidth()/2f,getHeight()*.067f,21,C("#24243A"),Paint.Align.CENTER);
+        wrap(c,subtitle,getWidth()/2f,getHeight()*.112f,getWidth()*.82f,19,C("#3F4156"));
+        button(c,"MENU",getWidth()*.045f,getHeight()*.185f,getWidth()*.22f,dp(48),C("#7CD6C1"));
+        button(c,"HINT "+hints,getWidth()*.735f,getHeight()*.185f,getWidth()*.22f,dp(48),C("#FF7A89"));
     }
 
     private void chibi(Canvas c,float x,float y,float scale,boolean lookLeft,boolean angry){
@@ -219,12 +224,26 @@ public class GameView extends View implements SensorEventListener {
     private void showToast(String s){ toast=s; toastUntil=System.currentTimeMillis()+900; }
     private void useHint(){
         if(screen<1||screen>25) return;
+        if(hintOpen) return;
         if(hints<=0){ showToast("No hints left — shop comes later!"); return; }
-        hints--; prefs.edit().putInt("hints",hints).apply(); showToast(hintsText[screen]);
+        hints--; prefs.edit().putInt("hints",hints).apply(); hintOpen=true; invalidate();
+    }
+
+    private void drawHintOverlay(Canvas c){
+        if(!hintOpen || screen<1 || screen>25) return;
+        p.setColor(Color.argb(165,20,20,35)); p.setStyle(Paint.Style.FILL); c.drawRect(0,0,getWidth(),getHeight(),p);
+        float x=getWidth()*.07f, y=getHeight()*.24f, w=getWidth()*.86f, h=getHeight()*.38f;
+        rr(c,x,y,w,h,dp(24),Color.WHITE);
+        p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(dp(4)); p.setColor(C("#24243A")); c.drawRoundRect(x,y,x+w,y+h,dp(24),dp(24),p);
+        mangaTxt(c,"HINT",x+dp(24),y+dp(48),24,C("#E94C67"),Paint.Align.LEFT);
+        wrap(c,hintsText[screen],x+w/2,y+dp(100),w-dp(48),21,C("#24243A"));
+        rr(c,x+w-dp(62),y+dp(16),dp(46),dp(46),dp(14),C("#FF7A89"));
+        mangaTxt(c,"×",x+w-dp(39),y+dp(49),26,Color.WHITE,Paint.Align.CENTER);
+        button(c,"CLOSE",x+w*.25f,y+h-dp(72),w*.50f,dp(52),C("#FFCA4B"));
     }
 
     private void gotoLevel(int n){
-        screen=n; roomStart=System.currentTimeMillis(); toast=""; shakeCount=0; stillScore=0; resetLevel(); invalidate();
+        screen=n; roomStart=System.currentTimeMillis(); toast=""; hintOpen=false; shakeCount=0; stillScore=0; resetLevel(); invalidate();
     }
     private void solved(){
         prefs.edit().putBoolean("level_"+screen,true).putLong("time_"+screen,System.currentTimeMillis()-roomStart).apply();
@@ -244,8 +263,9 @@ public class GameView extends View implements SensorEventListener {
         bubbleX=getWidth()*.24f; bubbleY=getHeight()*.38f; bubbleDrag=false;
         blueX=getWidth()*.30f; blueY=getHeight()*.62f; yellowX=getWidth()*.70f; yellowY=getHeight()*.62f; orbDrag=0; greenMade=false;
         memoryPhase=0; memoryPos=0; memoryShownAt=System.currentTimeMillis(); code="";
-        titleCardX=getWidth()*.50f; titleCardY=getHeight()*.24f; titleDrag=false;
-        oppositeChoice=-1; gatePressed=false; mirrorSolved=false;
+        carrotX=getWidth()*.20f; carrotY=getHeight()*.77f; stone1X=getWidth()*.43f; stone1Y=getHeight()*.80f; stone2X=getWidth()*.58f; stone2Y=getHeight()*.80f;
+        snowDrag=0; snowEye1=false; snowEye2=false; snowNose=false; snowSmile=false; drawingSmile=false; snowSmilePoints.clear(); snowEasterPhase=0; snowEasterAt=0;
+        oppositeChoice=-1; gatePressed=false; screenshotCaptured=false;
         bossPhase=0; bossSealRevealed=false; bossBothStart=0;
     }
     private void resetBall(){ ballX=getWidth()*.18f; ballY=getHeight()*.70f; vx=vy=0; lastFrame=System.nanoTime(); }
@@ -253,6 +273,7 @@ public class GameView extends View implements SensorEventListener {
     @Override protected void onDraw(Canvas c){
         super.onDraw(c);
         if(screen==0) drawHome(c); else if(screen==90) drawLevelSelect(c); else if(screen==99) drawFinish(c); else drawLevel(c);
+        drawHintOverlay(c);
         if(!toast.isEmpty() && System.currentTimeMillis()<toastUntil){ rr(c,getWidth()*.08f,getHeight()*.86f,getWidth()*.84f,dp(72),dp(18),C("#24243A")); wrap(c,toast,getWidth()/2f,getHeight()*.86f+dp(30),getWidth()*.76f,16,Color.WHITE); }
         postInvalidateOnAnimation();
     }
@@ -335,15 +356,106 @@ public class GameView extends View implements SensorEventListener {
     private void l20(Canvas c){ header(c,"Cats, stars, swords. In that order."); mangaTxt(c,"🐱 🐱 🐱",getWidth()/2f,getHeight()*.30f,28,C("#24243A"),Paint.Align.CENTER);mangaTxt(c,"★ ★ ★ ★",getWidth()/2f,getHeight()*.38f,28,C("#FFB300"),Paint.Align.CENTER);mangaTxt(c,"⚔ ⚔",getWidth()/2f,getHeight()*.46f,28,C("#24243A"),Paint.Align.CENTER); drawKeypad(c);mangaTxt(c,code.isEmpty()?"_ _ _":code,getWidth()/2f,getHeight()*.56f,28,C("#E94C67"),Paint.Align.CENTER);if(code.equals("342"))solved();if(code.length()>=3&&!code.equals("342")){showToast("NOPE");code="";}}
     private void drawKeypad(Canvas c){float top=getHeight()*.62f;int n=1;for(int r=0;r<3;r++)for(int col=0;col<3;col++){float x=getWidth()*.22f+col*getWidth()*.28f,y=top+r*dp(62);rr(c,x-dp(28),y-dp(24),dp(56),dp(48),dp(12),Color.WHITE);mangaTxt(c,String.valueOf(n++),x,y+sp(7),18,C("#24243A"),Paint.Align.CENTER);}}
 
-    private void l21(Canvas c){ header(c,"The interface thinks it is untouchable."); door(c,getWidth()*.5f,getHeight()*.62f,getWidth()*.42f,getHeight()*.30f);rr(c,titleCardX-getWidth()*.20f,titleCardY-dp(38),getWidth()*.40f,dp(76),dp(14),C("#FFCA4B"));mangaTxt(c,"ROOM 21",titleCardX,titleCardY+sp(8),20,C("#24243A"),Paint.Align.CENTER);wrap(c,"Drag the label somewhere useful.",getWidth()/2f,getHeight()*.82f,getWidth()*.80f,18,C("#55566D")); if(titleCardY>getHeight()*.58f&&Math.abs(titleCardX-getWidth()*.5f)<getWidth()*.18f)solved(); }
+    private void l21(Canvas c){
+        header(c,"Give the snowman a proper manga face.");
+        float cx=getWidth()*.54f, headY=getHeight()*.46f, headR=dp(72);
+        float bodyY=getHeight()*.64f;
+        float eyeLX=cx-dp(25), eyeRX=cx+dp(25), eyeY=headY-dp(15);
+        float noseX=cx, noseY=headY+dp(8);
+        float buttX=cx+dp(76), buttY=bodyY+dp(20);
 
-    private void l22(Canvas c){ header(c,"He says: 'I ALWAYS LIE. Choose LEFT.'");chibi(c,getWidth()*.5f,getHeight()*.42f,1.25f,true,true);button(c,"LEFT",getWidth()*.10f,getHeight()*.68f,getWidth()*.34f,dp(64),C("#FF8D7C"));button(c,"RIGHT",getWidth()*.56f,getHeight()*.68f,getWidth()*.34f,dp(64),C("#7CD6C1"));if(oppositeChoice==1)solved(); }
+        // snowman body
+        p.setStyle(Paint.Style.FILL); p.setColor(Color.WHITE);
+        c.drawCircle(cx,bodyY,dp(92),p); c.drawCircle(cx,headY,headR,p);
+        p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(dp(3)); p.setColor(C("#B8D9E8"));
+        c.drawCircle(cx,bodyY,dp(92),p); c.drawCircle(cx,headY,headR,p);
+
+        // blush during the easter egg warning/melt
+        if(snowEasterPhase>0){
+            p.setStyle(Paint.Style.FILL); p.setColor(C("#FF8FA3"));
+            c.drawCircle(cx-dp(42),headY+dp(13),dp(15),p); c.drawCircle(cx+dp(42),headY+dp(13),dp(15),p);
+        }
+
+        // target guides stay subtle
+        p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(dp(2)); p.setColor(C("#D3E2E8"));
+        if(!snowEye1)c.drawCircle(eyeLX,eyeY,dp(12),p); if(!snowEye2)c.drawCircle(eyeRX,eyeY,dp(12),p);
+
+        // placed features
+        p.setStyle(Paint.Style.FILL); p.setColor(C("#3C3B45"));
+        if(snowEye1)c.drawCircle(eyeLX,eyeY,dp(12),p);
+        if(snowEye2)c.drawCircle(eyeRX,eyeY,dp(12),p);
+        if(snowNose){
+            p.setColor(C("#F28C28")); Path n=new Path(); n.moveTo(noseX-dp(6),noseY-dp(8)); n.lineTo(noseX+dp(62),noseY); n.lineTo(noseX-dp(6),noseY+dp(8)); n.close(); c.drawPath(n,p);
+        }
+
+        // smile drawn by the player
+        if(!snowSmilePoints.isEmpty()){
+            p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(dp(5)); p.setStrokeCap(Paint.Cap.ROUND); p.setStrokeJoin(Paint.Join.ROUND); p.setColor(C("#3C3B45"));
+            Path smile=new Path(); PointF first=snowSmilePoints.get(0); smile.moveTo(first.x,first.y); for(int i=1;i<snowSmilePoints.size();i++){PointF q=snowSmilePoints.get(i);smile.lineTo(q.x,q.y);} c.drawPath(smile,p); p.setStrokeCap(Paint.Cap.BUTT);
+        }
+
+        // loose pieces
+        if(!snowNose){
+            c.save(); c.translate(carrotX,carrotY); p.setStyle(Paint.Style.FILL); p.setColor(C("#F28C28")); Path n=new Path(); n.moveTo(-dp(34),-dp(10)); n.lineTo(dp(38),0); n.lineTo(-dp(34),dp(10)); n.close(); c.drawPath(n,p); p.setColor(C("#55A868")); c.drawRect(-dp(40),-dp(16),-dp(30),dp(16),p); c.restore();
+        }
+        p.setColor(C("#3C3B45")); p.setStyle(Paint.Style.FILL);
+        if(!snowEye1)c.drawCircle(stone1X,stone1Y,dp(16),p);
+        if(!snowEye2)c.drawCircle(stone2X,stone2Y,dp(16),p);
+
+        // instructions kept short and large
+        if(!(snowEye1&&snowEye2&&snowNose&&snowSmile))
+            wrap(c,"2 STONES + CARROT + DRAW THE SMILE",getWidth()/2f,getHeight()*.875f,getWidth()*.86f,19,C("#24243A"));
+
+        long now=System.currentTimeMillis();
+        if(snowEasterPhase==1){
+            speech(c,"no, li no!",getWidth()*.18f,getHeight()*.275f,getWidth()*.64f,dp(88));
+            if(now-snowEasterAt>900){snowEasterPhase=2;snowEasterAt=now;}
+        } else if(snowEasterPhase==2){
+            float t=Math.min(1f,(now-snowEasterAt)/1200f);
+            // puddle grows while snowman visually collapses
+            p.setStyle(Paint.Style.FILL); p.setColor(C("#BDE7F4")); c.drawOval(cx-dp(105)*t,bodyY+dp(75)-dp(18)*t,cx+dp(105)*t,bodyY+dp(75)+dp(22)*t,p);
+            mangaTxt(c,"...squish",cx,bodyY+dp(135),20,C("#4B7180"),Paint.Align.CENTER);
+            if(t>=1f){showToast("SNOWMAN RESET!");roomStart=System.currentTimeMillis();resetLevel();}
+        }
+
+        if(snowEye1&&snowEye2&&snowNose&&snowSmile&&snowEasterPhase==0) solved();
+    }
+
+    private void l22(Canvas c){ header(c,"He always chooses the WRONG door."); chibi(c,getWidth()*.5f,getHeight()*.40f,1.25f,true,true); speech(c,"I PICK LEFT!",getWidth()*.22f,getHeight()*.49f,getWidth()*.56f,dp(95)); button(c,"LEFT",getWidth()*.10f,getHeight()*.70f,getWidth()*.34f,dp(64),C("#FF8D7C")); button(c,"RIGHT",getWidth()*.56f,getHeight()*.70f,getWidth()*.34f,dp(64),C("#7CD6C1")); wrap(c,"If his choice is always wrong, which door is safe?",getWidth()/2f,getHeight()*.84f,getWidth()*.82f,19,C("#3F4156")); if(oppositeChoice==1)solved(); }
 
     private void l23(Canvas c){ header(c,"One finger opens the gate. Gravity does the rest.");float L=getWidth()*.08f,R=getWidth()*.92f,T=getHeight()*.30f,B=getHeight()*.74f;rr(c,L,T,R-L,B-T,dp(20),Color.WHITE);float gateX=getWidth()*.55f;p.setColor(C("#E94C67"));p.setStyle(Paint.Style.FILL);if(!gatePressed)c.drawRect(gateX,T,gateX+dp(14),B,p);button(c,"HOLD",getWidth()*.08f,getHeight()*.78f,getWidth()*.28f,dp(58),C("#FFCA4B"));long n=System.nanoTime();float dt=Math.min(.033f,(n-lastFrame)/1_000_000_000f);lastFrame=n;vx+=ax*50*dt;vy+=ay*50*dt;vx*=.992f;vy*=.992f;ballX+=vx;ballY+=vy;float r=dp(16);if(ballX<L+r)ballX=L+r;if(ballX>R-r)ballX=R-r;if(ballY<T+r)ballY=T+r;if(ballY>B-r)ballY=B-r;if(!gatePressed&&ballX>gateX-r&&ballX<gateX+dp(26)&&ballY>T&&ballY<B){ballX=gateX-r;vx*=-.5f;}p.setColor(C("#42405F"));c.drawCircle(ballX,ballY,r,p);float tx=getWidth()*.82f,ty=getHeight()*.38f;p.setColor(C("#55B979"));c.drawCircle(tx,ty,dp(25),p);if(Math.hypot(ballX-tx,ballY-ty)<dp(28))solved(); }
 
-    private void l24(Canvas c){ header(c,"The mirror shows →. What does reality do?");rr(c,getWidth()*.17f,getHeight()*.32f,getWidth()*.66f,getHeight()*.26f,dp(20),C("#DCEBFA"));mangaTxt(c,"→",getWidth()/2f,getHeight()*.50f,54,C("#24243A"),Paint.Align.CENTER);mangaTxt(c,"MIRROR",getWidth()/2f,getHeight()*.66f,22,C("#6B65B5"),Paint.Align.CENTER);if(mirrorSolved)solved(); }
+    private void l24(Canvas c){
+        header(c,"This key refuses to leave the screen.");
+        mangaTxt(c,"🔑",getWidth()*.50f,getHeight()*.47f,58,C("#24243A"),Paint.Align.CENTER);
+        speedBurst(c,getWidth()*.50f,getHeight()*.47f,dp(105));
+        speech(c,"YOU CAN LOOK... BUT DON'T TOUCH!",getWidth()*.12f,getHeight()*.59f,getWidth()*.76f,dp(110));
+        mangaTxt(c,"TAKE IT WITH YOU",getWidth()/2f,getHeight()*.77f,25,C("#E94C67"),Paint.Align.CENTER);
+        if(android.os.Build.VERSION.SDK_INT < 34){
+            wrap(c,"Screenshot detection needs Android 14+ in this test build.",getWidth()/2f,getHeight()*.84f,getWidth()*.80f,18,C("#55566D"));
+        }
+        if(screenshotCaptured) solved();
+    }
 
     private void l25(Canvas c){ header(c,"FINAL BOSS: three lessons, one room."); if(bossPhase==0){rr(c,getWidth()*.27f,getHeight()*.34f,getWidth()*.46f,getHeight()*.30f,dp(20),C("#77A7DD"));mangaTxt(c,"SHAKE",getWidth()/2f,getHeight()*.52f,30,C("#24243A"),Paint.Align.CENTER);if(shakeCount>=3){bossSealRevealed=true;bossPhase=1;showToast("SEALS REVEALED!");}} else if(bossPhase==1){float y=getHeight()*.50f;seal(c,getWidth()*.34f,y,"1");seal(c,getWidth()*.66f,y,"2");boolean a=false,b=false;for(int i=0;i<pointerCount;i++){if(Math.hypot(px[i]-getWidth()*.34f,py[i]-y)<dp(60))a=true;if(Math.hypot(px[i]-getWidth()*.66f,py[i]-y)<dp(60))b=true;}if(a&&b){if(bossBothStart==0)bossBothStart=System.currentTimeMillis();if(System.currentTimeMillis()-bossBothStart>800){bossPhase=2;resetBall();showToast("FINAL ORB!");}}else bossBothStart=0;} else {float tx=getWidth()*.5f,ty=getHeight()*.40f;long n=System.nanoTime();float dt=Math.min(.033f,(n-lastFrame)/1_000_000_000f);lastFrame=n;vx+=ax*55*dt;vy+=ay*55*dt;vx*=.992f;vy*=.992f;ballX+=vx;ballY+=vy;ballX=Math.max(dp(20),Math.min(getWidth()-dp(20),ballX));ballY=Math.max(getHeight()*.28f,Math.min(getHeight()*.78f,ballY));p.setColor(C("#FFCA4B"));c.drawCircle(tx,ty,dp(32),p);p.setColor(C("#42405F"));c.drawCircle(ballX,ballY,dp(18),p);if(Math.hypot(ballX-tx,ballY-ty)<dp(30))solved();} mangaTxt(c,"PHASE "+(bossPhase+1)+" / 3",getWidth()/2f,getHeight()*.78f,22,C("#E94C67"),Paint.Align.CENTER); }
+
+    private void speedBurst(Canvas c,float cx,float cy,float radius){
+        p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(dp(3)); p.setColor(C("#24243A"));
+        for(int i=0;i<18;i++){
+            double a=(Math.PI*2*i)/18.0;
+            float x1=cx+(float)Math.cos(a)*radius*.62f, y1=cy+(float)Math.sin(a)*radius*.62f;
+            float x2=cx+(float)Math.cos(a)*radius, y2=cy+(float)Math.sin(a)*radius;
+            c.drawLine(x1,y1,x2,y2,p);
+        }
+    }
+
+    public void onScreenshotDetected(){
+        if(screen==24 && !hintOpen){
+            screenshotCaptured=true;
+            showToast("SNAP! YOU CAUGHT IT! 📸");
+            invalidate();
+        }
+    }
 
     private void cache(MotionEvent e){ pointerCount=Math.min(10,e.getPointerCount()); for(int i=0;i<pointerCount;i++){px[i]=e.getX(i);py[i]=e.getY(i);} }
 
@@ -353,7 +465,12 @@ public class GameView extends View implements SensorEventListener {
         if(screen==0){ if(a==MotionEvent.ACTION_DOWN&&in(x,y,getWidth()*.18f,getHeight()*.67f,getWidth()*.82f,getHeight()*.78f))gotoLevel(1); else if(a==MotionEvent.ACTION_DOWN&&in(x,y,getWidth()*.18f,getHeight()*.78f,getWidth()*.82f,getHeight()*.88f))screen=90; invalidate(); return true; }
         if(screen==90){ if(a==MotionEvent.ACTION_DOWN){int cols=5;float gap=dp(8),cell=(getWidth()-dp(32)-gap*4)/5,top=getHeight()*.12f;for(int i=1;i<=25;i++){int row=(i-1)/5,col=(i-1)%5;float lx=dp(16)+col*(cell+gap),ty=top+row*(cell+gap);if(in(x,y,lx,ty,lx+cell,ty+cell)){gotoLevel(i);return true;}}if(y>getHeight()*.84f)screen=0;}invalidate();return true; }
         if(screen==99){ if(a==MotionEvent.ACTION_DOWN){screen=90;invalidate();}return true; }
-        if(a==MotionEvent.ACTION_DOWN&&in(x,y,getWidth()*.77f,getHeight()*.15f,getWidth(),getHeight()*.24f)){useHint();return true;}
+        if(hintOpen){
+            if(a==MotionEvent.ACTION_DOWN){float hx=getWidth()*.07f,hy=getHeight()*.24f,hw=getWidth()*.86f,hh=getHeight()*.38f;if(in(x,y,hx+hw-dp(78),hy,hx+hw,hy+dp(78))||in(x,y,hx+hw*.24f,hy+hh-dp(90),hx+hw*.76f,hy+hh)){hintOpen=false;invalidate();}}
+            return true;
+        }
+        if(a==MotionEvent.ACTION_DOWN&&in(x,y,getWidth()*.035f,getHeight()*.175f,getWidth()*.285f,getHeight()*.265f)){screen=0;hintOpen=false;invalidate();return true;}
+        if(a==MotionEvent.ACTION_DOWN&&in(x,y,getWidth()*.715f,getHeight()*.175f,getWidth()*.98f,getHeight()*.265f)){useHint();return true;}
 
         switch(screen){
             case 1:
@@ -377,10 +494,46 @@ public class GameView extends View implements SensorEventListener {
             case 18: if(a==MotionEvent.ACTION_DOWN){if(Math.hypot(x-blueX,y-blueY)<dp(60))orbDrag=1;else if(Math.hypot(x-yellowX,y-yellowY)<dp(60))orbDrag=2;}if(a==MotionEvent.ACTION_MOVE){if(orbDrag==1){blueX=x;blueY=y;}if(orbDrag==2){yellowX=x;yellowY=y;}}if(a==MotionEvent.ACTION_UP)orbDrag=0;break;
             case 19: if(memoryPhase==1&&a==MotionEvent.ACTION_DOWN){float[] xs={.18f,.39f,.61f,.82f};int hit=-1;for(int i=0;i<4;i++)if(Math.hypot(x-getWidth()*xs[i],y-getHeight()*.55f)<dp(48))hit=i;if(hit>=0){if(hit==memorySeq[memoryPos]){memoryPos++;if(memoryPos==4)solved();}else{showToast("Wrong face!");memoryPos=0;}}}break;
             case 20: if(a==MotionEvent.ACTION_DOWN&&y>getHeight()*.58f){float top=getHeight()*.62f;for(int r=0;r<3;r++)for(int col=0;col<3;col++){float kx=getWidth()*.22f+col*getWidth()*.28f,ky=top+r*dp(62);if(Math.hypot(x-kx,y-ky)<dp(34)&&code.length()<3)code+=String.valueOf(r*3+col+1);}}break;
-            case 21: if(a==MotionEvent.ACTION_DOWN&&Math.hypot(x-titleCardX,y-titleCardY)<dp(110)){titleDrag=true;keyDX=x-titleCardX;keyDY=y-titleCardY;}if(a==MotionEvent.ACTION_MOVE&&titleDrag){titleCardX=x-keyDX;titleCardY=y-keyDY;}if(a==MotionEvent.ACTION_UP)titleDrag=false;break;
-            case 22: if(a==MotionEvent.ACTION_DOWN&&y>getHeight()*.64f){oppositeChoice=x>getWidth()*.5f?1:0;if(oppositeChoice==0)showToast("He said he lies!");}break;
+            case 21:
+                if(snowEasterPhase>0) break;
+                float scx=getWidth()*.54f, sheadY=getHeight()*.46f, sbodyY=getHeight()*.64f;
+                float seyeLX=scx-dp(25), seyeRX=scx+dp(25), seyeY=sheadY-dp(15);
+                float snoseX=scx, snoseY=sheadY+dp(8);
+                float sbuttX=scx+dp(76), sbuttY=sbodyY+dp(20);
+                if(a==MotionEvent.ACTION_DOWN){
+                    if(!snowNose&&Math.hypot(x-carrotX,y-carrotY)<dp(70)){snowDrag=1;keyDX=x-carrotX;keyDY=y-carrotY;}
+                    else if(!snowEye1&&Math.hypot(x-stone1X,y-stone1Y)<dp(45)){snowDrag=2;keyDX=x-stone1X;keyDY=y-stone1Y;}
+                    else if(!snowEye2&&Math.hypot(x-stone2X,y-stone2Y)<dp(45)){snowDrag=3;keyDX=x-stone2X;keyDY=y-stone2Y;}
+                    else if(y>sheadY+dp(18)&&y<sheadY+dp(70)&&Math.abs(x-scx)<dp(65)){drawingSmile=true;snowSmilePoints.clear();snowSmilePoints.add(new PointF(x,y));}
+                }
+                if(a==MotionEvent.ACTION_MOVE){
+                    if(snowDrag==1){carrotX=x-keyDX;carrotY=y-keyDY;}
+                    if(snowDrag==2){stone1X=x-keyDX;stone1Y=y-keyDY;}
+                    if(snowDrag==3){stone2X=x-keyDX;stone2Y=y-keyDY;}
+                    if(drawingSmile&&snowSmilePoints.size()<80)snowSmilePoints.add(new PointF(x,y));
+                }
+                if(a==MotionEvent.ACTION_UP||a==MotionEvent.ACTION_CANCEL){
+                    if(snowDrag==1){
+                        if(Math.hypot(carrotX-sbuttX,carrotY-sbuttY)<dp(72)){snowEasterPhase=1;snowEasterAt=System.currentTimeMillis();snowDrag=0;break;}
+                        if(Math.hypot(carrotX-snoseX,carrotY-snoseY)<dp(55)){snowNose=true;} else {carrotX=getWidth()*.20f;carrotY=getHeight()*.77f;}
+                    }
+                    if(snowDrag==2){if(Math.hypot(stone1X-seyeLX,stone1Y-seyeY)<dp(42)){snowEye1=true;}else{stone1X=getWidth()*.43f;stone1Y=getHeight()*.80f;}}
+                    if(snowDrag==3){if(Math.hypot(stone2X-seyeRX,stone2Y-seyeY)<dp(42)){snowEye2=true;}else{stone2X=getWidth()*.58f;stone2Y=getHeight()*.80f;}}
+                    snowDrag=0;
+                    if(drawingSmile){
+                        drawingSmile=false;
+                        if(snowSmilePoints.size()>=5){
+                            PointF f=snowSmilePoints.get(0), l=snowSmilePoints.get(snowSmilePoints.size()-1), m=snowSmilePoints.get(snowSmilePoints.size()/2);
+                            float ends=(f.y+l.y)/2f;
+                            if(f.x<scx-dp(18)&&l.x>scx+dp(18)&&m.y>ends+dp(4)){snowSmile=true;}
+                            else {snowSmilePoints.clear();showToast("DRAW A CURVED SMILE ☺");}
+                        } else snowSmilePoints.clear();
+                    }
+                }
+                break;
+            case 22: if(a==MotionEvent.ACTION_DOWN&&y>getHeight()*.64f){oppositeChoice=x>getWidth()*.5f?1:0;if(oppositeChoice==0)showToast("That is the door he picked — so it is wrong.");}break;
             case 23: gatePressed=false;for(int i=0;i<pointerCount;i++)if(in(px[i],py[i],getWidth()*.06f,getHeight()*.75f,getWidth()*.40f,getHeight()*.88f))gatePressed=true;break;
-            case 24: if(a==MotionEvent.ACTION_UP){float dx=x-downX;if(dx<-getWidth()*.25f)mirrorSolved=true;else if(Math.abs(dx)>getWidth()*.20f)showToast("Mirror it.");}break;
+            case 24: if(a==MotionEvent.ACTION_DOWN)showToast("Touching will not take it with you.");break;
             case 25: break;
         }
         invalidate(); return true;
