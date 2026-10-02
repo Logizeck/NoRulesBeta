@@ -1,0 +1,14 @@
+NO RULES BETA — UPLOAD & BUILD
+
+1. Extract this ZIP on a computer.
+2. Open https://github.com/Logizeck/NoRulesBeta
+3. Choose Add file > Upload files.
+4. Upload the CONTENTS of the extracted NoRulesBeta-GitHubReady folder (not the ZIP itself).
+   Important: include the hidden .github folder. On Windows Explorer enable View > Show > Hidden items if needed.
+5. Commit directly to the main branch.
+6. Open the Actions tab in the repository.
+7. Open "Build Android APK" and wait for the run to finish with a green check.
+8. Open the completed run. Under Artifacts, download "NoRulesBeta-APK".
+9. Extract that artifact ZIP on Android. Install app-debug.apk.
+
+If Android blocks installation, allow "Install unknown apps" for the browser or file manager you used to open the APK.

@@ -1,0 +1,14 @@
+plugins { id 'com.android.application' }
+
+android {
+    namespace 'com.norules.beta'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'com.norules.beta'
+        minSdk 23
+        targetSdk 35
+        versionCode 3
+        versionName '0.3-beta'
+    }
+}
