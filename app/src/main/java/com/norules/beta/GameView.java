@@ -21,15 +21,18 @@ public class GameView extends View implements SensorEventListener {
     private final SharedPreferences prefs;
     private final float density, scaledDensity;
 
-    private int screen = 0; // 0 home, 1..35 levels, 90 level select, 95 simulated ad, 99 finish
+    private int screen = -1; // -1 language, 0 home, 1..50 levels, 90 level select, 95 simulated ad, 99 finish
     private long roomStart = System.currentTimeMillis();
     private String toast = "";
     private long toastUntil = 0;
     private int hints = 3;
     private boolean hintOpen = false;
-    private static final int TOTAL_LEVELS = 35;
+    private static final int TOTAL_LEVELS = 50;
     private static final int LEVELS_PER_PAGE = 12;
     private int levelPage = 0;
+    private static final int AREA_COUNT = (TOTAL_LEVELS + LEVELS_PER_PAGE - 1) / LEVELS_PER_PAGE;
+    private String languageCode = "en";
+    private final int[] hintTier = new int[TOTAL_LEVELS+1];
     private long lastFakeAdAt = System.currentTimeMillis();
     private int levelsSinceFakeAd = 0;
     private long fakeAdShownAt = 0;
@@ -152,6 +155,23 @@ public class GameView extends View implements SensorEventListener {
     private float rubProgress=0; private boolean rubbing=false; private String revealCode="";
     private int forgeMask=0; private int forgeShakeStart=0; private int forgeGemTaps=0; private float forgePanelX; private boolean forgePanelDrag=false; private long forgeTwoFingerStart=0; private float forgeKeyX,forgeKeyY; private boolean forgeKeyDrag=false;
 
+    // L36-L50 new puzzle state
+    private int neonSwitchStep=0;
+    private float dialAngle=0,lastDialAngle=0; private boolean dialDrag=false;
+    private float magnetX,magnetY,metalX,metalY; private boolean magnetDrag=false;
+    private final int[] tileRot={0,0,0,0};
+    private float flashlightX,flashlightY; private boolean flashlightDrag=false; private boolean hiddenMarkFound=false;
+    private int balanceLeft=0,balanceRight=0;
+    private int colorSeqPos=0; private final int[] colorSeq={2,0,3,1};
+    private int mirrorStep=0; private final int[] mirrorSeq={1,3,0,2};
+    private int wireMask=0;
+    private String safeCode="";
+    private int peelLayers=0;
+    private int gridMemPos=0; private long gridShownAt=0; private boolean gridReady=false; private final int[] gridSeq={0,3,5,2};
+    private long dualHoldStart=0;
+    private int shadowChoice=-1;
+    private int finalStage=0, finalTapCount=0; private float finalLeverY=0; private boolean finalLeverDrag=false;
+
     // L25 boss
     private int bossPhase;
     private boolean bossSealRevealed;
@@ -164,7 +184,10 @@ public class GameView extends View implements SensorEventListener {
             "BIG DOOR", "MOVE THE BUBBLE", "COLOR FUSION", "MEMORY FACES", "COUNT IT",
             "SNOWMAN FACE", "WRONG DOOR", "TILT + HOLD", "SCREENSHOT!", "BOSS ROOM",
             "KEY ASSEMBLY", "SELFIE TROUBLE", "MESSY DESK", "TOY BOX", "KITCHEN CHAOS", "SENSOR VAULT",
-            "LOCK PINS", "ODD LOGIC", "RUB IT OUT", "MASTER KEY ROOM"
+            "LOCK PINS", "ODD LOGIC", "RUB IT OUT", "MASTER KEY ROOM",
+            "NEON SWITCHES", "SAFE DIAL", "MAGNET HEIST", "ROTATE THE PATH", "FLASHLIGHT",
+            "BALANCE IT", "COLOR ORDER", "MIRROR PANEL", "BROKEN CIRCUIT", "SECRET CODE",
+            "PEEL THE POSTER", "MEMORY GRID", "TWO-HAND LOCK", "SHADOW DOORS", "CHAOS CORE"
     };
 
     private final String[] hintsText = {
@@ -203,7 +226,22 @@ public class GameView extends View implements SensorEventListener {
             "Each pin has a visible target notch. Tap the pin until its head lines up with the mark.",
             "Odd shapes low-to-high first. Then even shapes high-to-low.",
             "Rub the grime away until the hidden code is readable, then enter it.",
-            "Slide the panel, crack the box, and pull the cyan tab down. Drag all three revealed pieces into the key outline, then use that same rebuilt key."
+            "Slide the panel, crack the box, and pull the cyan tab down. Drag all three revealed pieces into the key outline, then use that same rebuilt key.",
+            "The three switches flash in a sequence. Copy that exact order.",
+            "Drag around the circular dial. Stop when the pointer aligns with the glowing notch.",
+            "Move the magnet, not the metal piece. Bring the magnet close enough to pull it to the exit.",
+            "Tap each tile to rotate it until the glowing path becomes continuous from left to right.",
+            "Drag the flashlight. Something useful is hidden in the darkness.",
+            "Tap the weights until both sides show the same total.",
+            "Watch the colored lamps, then tap them back in the same order.",
+            "The panel is mirrored. Read the arrows as their reflected directions.",
+            "Activate all three broken circuit nodes. Each node must connect to the center.",
+            "The shapes tell you three digits. Enter them on the keypad in left-to-right order.",
+            "Swipe the poster repeatedly. There are several layers hiding something underneath.",
+            "Memorize the four lit squares, then tap those squares in the same order.",
+            "Keep both pads pressed at the same time until the lock finishes charging.",
+            "The real door casts the only shadow that matches its frame. Tap that door.",
+            "Open the latch, pull the lever, then hit the core three times. Every step is visible."
     };
 
     public GameView(Context c) {
@@ -215,6 +253,8 @@ public class GameView extends View implements SensorEventListener {
         audio = (AudioManager)c.getSystemService(Context.AUDIO_SERVICE);
         prefs = c.getSharedPreferences("no_rules_beta", Context.MODE_PRIVATE);
         hints = prefs.getInt("hints", 3);
+        languageCode = prefs.getString("language", "");
+        screen = languageCode.isEmpty() ? -1 : 0;
         snowmanArt = BitmapFactory.decodeResource(getResources(), getResources().getIdentifier("snowman_3d", "drawable", c.getPackageName()));
         setKeepScreenOn(true);
         setBackgroundColor(C("#F7E8C6"));
@@ -291,14 +331,16 @@ public class GameView extends View implements SensorEventListener {
     }
 
     private void drawAreaBackground(Canvas c,int page){
-        if(page==0) bgDojo(c); else if(page==1) bgWorkshop(c); else bgDigital(c);
+        if(page==0) bgDojo(c); else if(page==1) bgWorkshop(c); else if(page==2) bgDigital(c); else if(page==3) bgArcade(c); else bgLab(c);
     }
 
     private void drawThemeBackground(Canvas c,int level){
         if(level==21) bgWinter(c);
         else if(level==27) bgPhotoBooth(c);
         else if(level==9||level==12||level==13||level==14||level==15||level==22) bgDojo(c);
-        else if(level==1||level==3||level==7||level==8||level==11||level==16||level==17||level==24||level==26||level==28||level==29||level==30||level==35) bgWorkshop(c);
+        else if(level==1||level==3||level==7||level==8||level==11||level==16||level==17||level==24||level==26||level==28||level==29||level==30||level==35||level==40||level==44||level==46) bgWorkshop(c);
+        else if(level>=36&&level<=43) bgArcade(c);
+        else if(level>=45) bgLab(c);
         else bgDigital(c);
     }
 
@@ -323,6 +365,9 @@ public class GameView extends View implements SensorEventListener {
         p.setStyle(Paint.Style.FILL);p.setColor(C("#EEE9DF"));c.drawRect(0,H*.26f,W,H,p);p.setColor(C("#E02E3D"));c.drawCircle(W*.77f,H*.48f,W*.20f,p);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(dp(5));p.setColor(C("#111111"));for(int i=0;i<10;i++){float y=H*.33f+i*dp(65);c.drawLine(0,y,W,y-dp(35),p);}p.setColor(C("#FF2EA6"));c.drawLine(W*.08f,H*.65f,W*.34f,H*.54f,p);p.setColor(C("#39F7FF"));c.drawLine(W*.66f,H*.76f,W*.92f,H*.61f,p);
     }
 
+
+    private void bgArcade(Canvas c){c.drawColor(C("#10031D"));float W=getWidth(),H=getHeight();p.setStyle(Paint.Style.FILL);for(int i=0;i<10;i++){p.setColor(i%2==0?C("#23104A"):C("#090D1E"));c.drawRect(0,H*.27f+i*dp(58),W,H*.27f+(i+1)*dp(58),p);}p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(dp(4));p.setColor(C("#DFFF00"));c.drawCircle(W*.18f,H*.58f,dp(70),p);p.setColor(C("#FF2EA6"));c.drawCircle(W*.82f,H*.68f,dp(95),p);p.setColor(C("#39F7FF"));c.drawLine(0,H*.48f,W,H*.73f,p);}
+    private void bgLab(Canvas c){c.drawColor(C("#03151A"));float W=getWidth(),H=getHeight();p.setStyle(Paint.Style.FILL);p.setColor(C("#082A31"));c.drawRect(0,H*.28f,W,H,p);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(dp(3));for(int i=0;i<8;i++){p.setColor(i%2==0?C("#39F7FF"):C("#DFFF00"));float x=W*(.08f+i*.12f);c.drawLine(x,H*.31f,x-dp(30),H*.92f,p);}p.setColor(C("#FF2EA6"));c.drawRoundRect(W*.18f,H*.48f,W*.82f,H*.70f,dp(28),dp(28),p);}
     private void header(Canvas c,String subtitle){
         float x=getWidth()*.04f,y=getHeight()*.018f,w=getWidth()*.92f,h=getHeight()*.145f;
         neonPanel(c,x,y,w,h,C("#111936"),C("#39F7FF"));
@@ -330,8 +375,8 @@ public class GameView extends View implements SensorEventListener {
         mangaTxt(c,"#"+screen,x+dp(55),y+dp(30),15,Color.WHITE,Paint.Align.CENTER);
         mangaTxt(c,levelNames[screen],getWidth()/2f,y+dp(57),24,Color.WHITE,Paint.Align.CENTER);
         wrap(c,subtitle,getWidth()/2f,y+dp(94),w-dp(44),18,C("#DDE6FF"));
-        button(c,"MENU",getWidth()*.045f,getHeight()*.177f,getWidth()*.225f,dp(50),C("#39F7FF"));
-        button(c,"HINT "+hints,getWidth()*.730f,getHeight()*.177f,getWidth()*.225f,dp(50),C("#FF5BAA"));
+        button(c,T("MENU"),getWidth()*.045f,getHeight()*.177f,getWidth()*.225f,dp(50),C("#39F7FF"));
+        button(c,T("HINT")+" "+hints,getWidth()*.730f,getHeight()*.177f,getWidth()*.225f,dp(50),C("#FF5BAA"));
     }
 
     private void chibi(Canvas c,float x,float y,float scale,boolean lookLeft,boolean angry){
@@ -358,9 +403,17 @@ public class GameView extends View implements SensorEventListener {
         if(screen<1||screen>TOTAL_LEVELS) return;
         if(hintOpen) return;
         if(hints<=0){ showToast("No hints left — shop comes later!"); return; }
-        hints--; prefs.edit().putInt("hints",hints).apply(); hintOpen=true; invalidate();
+        hints--; prefs.edit().putInt("hints",hints).apply(); hintTier[screen]=Math.min(3,hintTier[screen]+1); hintOpen=true; invalidate();
     }
 
+
+    private String activeHint(){
+        int tier=(screen>=0&&screen<hintTier.length)?Math.max(1,hintTier[screen]):1;
+        String base=hintsText[screen];
+        if(tier==1)return base;
+        if(tier==2)return base+" Focus on the object or gesture named in the clue; decorative elements do not block the solution.";
+        return base+" This is the direct hint: perform exactly that interaction on the visible target, then watch for the success feedback.";
+    }
     private void drawHintOverlay(Canvas c){
         if(!hintOpen || screen<1 || screen>TOTAL_LEVELS) return;
         p.setColor(Color.argb(185,4,6,18)); p.setStyle(Paint.Style.FILL); c.drawRect(0,0,getWidth(),getHeight(),p);
@@ -369,7 +422,7 @@ public class GameView extends View implements SensorEventListener {
         rr(c,x,y,w,h,dp(24),C("#11183B"));
         p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(dp(4)); p.setColor(C("#39F7FF")); c.drawRoundRect(x,y,x+w,y+h,dp(24),dp(24),p);
         mangaTxt(c,"HINT",x+dp(24),y+dp(48),24,C("#FFE94D"),Paint.Align.LEFT);
-        wrap(c,hintsText[screen],x+w/2,y+dp(100),w-dp(48),21,Color.WHITE);
+        wrap(c,activeHint(),x+w/2,y+dp(100),w-dp(48),21,Color.WHITE);
         rr(c,x+w-dp(62),y+dp(16),dp(46),dp(46),dp(14),C("#FF2EA6"));
         mangaTxt(c,"×",x+w-dp(39),y+dp(49),26,Color.WHITE,Paint.Align.CENTER);
         button(c,"CLOSE",x+w*.25f,y+h-dp(72),w*.50f,dp(52),C("#FFE94D"));
@@ -417,15 +470,41 @@ public class GameView extends View implements SensorEventListener {
         soundTaps.clear(); soundPlaying=false; soundReady=false; logicPos=0; rubProgress=0; rubbing=false; revealCode="";
         forgeMask=0; forgeShakeStart=shakeCount; forgeGemTaps=0; forgePanelX=getWidth()*.56f; forgePanelDrag=false; forgeTwoFingerStart=0; forgeKeyX=getWidth()*.5f; forgeKeyY=getHeight()*.70f; forgeKeyDrag=false; forgePullY=getHeight()*.43f; forgePullDrag=false;
         foundPlacedMask=0;foundDrag=0;finalKeyDrag=false;finalKeyX=getWidth()*.50f;finalKeyY=keySlotY();for(int i=0;i<3;i++){foundPieceX[i]=getWidth()*.5f;foundPieceY[i]=getHeight()*.5f;}
+        neonSwitchStep=0;dialAngle=0;dialDrag=false;magnetX=getWidth()*.25f;magnetY=getHeight()*.65f;metalX=getWidth()*.72f;metalY=getHeight()*.48f;magnetDrag=false;for(int i=0;i<4;i++)tileRot[i]=i%3;flashlightX=getWidth()*.28f;flashlightY=getHeight()*.65f;flashlightDrag=false;hiddenMarkFound=false;balanceLeft=0;balanceRight=0;colorSeqPos=0;mirrorStep=0;wireMask=0;safeCode="";peelLayers=0;gridMemPos=0;gridShownAt=System.currentTimeMillis();gridReady=false;dualHoldStart=0;shadowChoice=-1;finalStage=0;finalTapCount=0;finalLeverY=getHeight()*.44f;finalLeverDrag=false;
     }
     private void resetBall(){ ballX=getWidth()*.18f; ballY=getHeight()*.70f; vx=vy=0; lastFrame=System.nanoTime(); }
 
     @Override protected void onDraw(Canvas c){
         super.onDraw(c);
-        if(screen==0) drawHome(c); else if(screen==90) drawLevelSelect(c); else if(screen==95) drawFakeAd(c); else if(screen==99) drawFinish(c); else drawLevel(c);
+        if(screen==-1) drawLanguageSelect(c); else if(screen==0) drawHome(c); else if(screen==90) drawLevelSelect(c); else if(screen==95) drawFakeAd(c); else if(screen==99) drawFinish(c); else drawLevel(c);
         drawHintOverlay(c);
-        if(!toast.isEmpty() && System.currentTimeMillis()<toastUntil){ rr(c,getWidth()*.08f,getHeight()*.86f,getWidth()*.84f,dp(72),dp(18),C("#EAF0FF")); wrap(c,toast,getWidth()/2f,getHeight()*.86f+dp(30),getWidth()*.76f,16,Color.WHITE); }
+        if(!toast.isEmpty() && System.currentTimeMillis()<toastUntil){ rr(c,getWidth()*.08f,getHeight()*.86f,getWidth()*.84f,dp(72),dp(18),C("#111936")); wrap(c,toast,getWidth()/2f,getHeight()*.86f+dp(30),getWidth()*.76f,16,Color.WHITE); }
         postInvalidateOnAnimation();
+    }
+
+
+    private String T(String k){
+        String l=languageCode==null?"en":languageCode;
+        if(k.equals("PLAY")){if(l.equals("de"))return "SPIELEN";if(l.equals("it"))return "GIOCA";if(l.equals("es"))return "JUGAR";if(l.equals("pt"))return "JOGAR";if(l.equals("fr"))return "JOUER";if(l.equals("zh"))return "开始";if(l.equals("ja"))return "プレイ";if(l.equals("ru"))return "ИГРАТЬ";}
+        if(k.equals("LEVEL_SELECT")){if(l.equals("de"))return "LEVELAUSWAHL";if(l.equals("it"))return "SELEZIONE LIVELLO";if(l.equals("es"))return "NIVELES";if(l.equals("pt"))return "NÍVEIS";if(l.equals("fr"))return "NIVEAUX";if(l.equals("zh"))return "关卡选择";if(l.equals("ja"))return "レベル選択";if(l.equals("ru"))return "ВЫБОР УРОВНЯ";}
+        if(k.equals("MENU")){if(l.equals("zh"))return "菜单";if(l.equals("ja"))return "メニュー";if(l.equals("ru"))return "МЕНЮ";return "MENU";}
+        if(k.equals("HINT")){if(l.equals("de"))return "TIPP";if(l.equals("it"))return "AIUTO";if(l.equals("es"))return "PISTA";if(l.equals("pt"))return "DICA";if(l.equals("fr"))return "INDICE";if(l.equals("zh"))return "提示";if(l.equals("ja"))return "ヒント";if(l.equals("ru"))return "ПОДСКАЗКА";}
+        if(k.equals("BACK")){if(l.equals("de"))return "ZURÜCK";if(l.equals("it"))return "INDIETRO";if(l.equals("es"))return "ATRÁS";if(l.equals("pt"))return "VOLTAR";if(l.equals("fr"))return "RETOUR";if(l.equals("zh"))return "返回";if(l.equals("ja"))return "戻る";if(l.equals("ru"))return "НАЗАД";}
+        if(k.equals("RETRY")){if(l.equals("de"))return "NOCHMAL";if(l.equals("it"))return "RIPROVA";if(l.equals("es"))return "REINTENTAR";if(l.equals("pt"))return "TENTAR DE NOVO";if(l.equals("fr"))return "RÉESSAYER";if(l.equals("zh"))return "重试";if(l.equals("ja"))return "もう一度";if(l.equals("ru"))return "ЕЩЁ РАЗ";}
+        if(k.equals("SNOW_NO")){if(l.equals("de"))return "Nein! Bloß nicht da!";if(l.equals("it"))return "No! Lì proprio no!";if(l.equals("es"))return "¡No! ¡Ahí no!";if(l.equals("pt"))return "Não! Aí não!";if(l.equals("fr"))return "Non ! Surtout pas là !";if(l.equals("zh"))return "不行！那里绝对不行！";if(l.equals("ja"))return "ダメ！そこは絶対ダメ！";if(l.equals("ru"))return "Нет! Только не туда!";return "No! Definitely not there!";}
+        if(k.equals("CHOOSE_LANGUAGE")){if(l.equals("it"))return "SCEGLI LA LINGUA";return "CHOOSE LANGUAGE";}
+        return k;
+    }
+
+    private void drawLanguageSelect(Canvas c){
+        bgDigital(c);float W=getWidth(),H=getHeight();
+        mangaTxt(c,"NO RULES",W*.5f,H*.105f,42,C("#FFE94D"),Paint.Align.CENTER);
+        mangaTxt(c,"CHOOSE LANGUAGE",W*.5f,H*.165f,25,Color.WHITE,Paint.Align.CENTER);
+        String[] labels={"English","Deutsch","Italiano","Español","Português","Français","中文","日本語","Русский"};
+        String[] codes={"en","de","it","es","pt","fr","zh","ja","ru"};
+        int cols=2;float bw=W*.39f,bh=dp(62),gap=dp(14),sx=W*.075f,sy=H*.23f;
+        for(int i=0;i<labels.length;i++){int row=i/cols,col=i%cols;float x=sx+col*(bw+W*.07f),y=sy+row*(bh+gap);button(c,labels[i],x,y,bw,bh,(i%3==0)?C("#39F7FF"):(i%3==1)?C("#FF5BAA"):C("#FFE94D"));}
+        wrap(c,"Language can be changed later in settings.",W*.5f,H*.84f,W*.78f,16,C("#DDE6FF"));
     }
 
     private void drawHome(Canvas c){
@@ -440,8 +519,8 @@ public class GameView extends View implements SensorEventListener {
         c.save();c.rotate(-17f,W*.29f,H*.46f);drawCompleteKey(c,W*.29f,H*.46f,.72f);c.restore();
         p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(dp(5));p.setColor(C("#FF2EA6"));c.drawCircle(W*.82f,H*.39f,dp(28),p);p.setColor(C("#39F7FF"));c.drawLine(W*.79f,H*.39f,W*.85f,H*.39f,p);c.drawLine(W*.82f,H*.36f,W*.82f,H*.42f,p);
         mangaTxt(c,"?",W*.82f,H*.405f,31,C("#FFE94D"),Paint.Align.CENTER);
-        button(c,"PLAY",W*.17f,H*.68f,W*.66f,dp(70),C("#DFFF00"));
-        button(c,"LEVEL SELECT",W*.17f,H*.79f,W*.66f,dp(62),C("#39F7FF"));
+        button(c,T("PLAY"),W*.17f,H*.68f,W*.66f,dp(70),C("#DFFF00"));
+        button(c,T("LEVEL_SELECT"),W*.17f,H*.79f,W*.66f,dp(62),C("#39F7FF"));
     }
 
     private void button(Canvas c,String s,float x,float y,float w,float h,int col){
@@ -453,12 +532,12 @@ public class GameView extends View implements SensorEventListener {
 
     private void drawLevelSelect(Canvas c){
         drawAreaBackground(c,levelPage);
-        String[] names={"STARTER MAYHEM","SNEAKY OBJECTS","WEIRD EXPERIMENTS"};
-        String[] subs={"Hands, gravity, timing & trouble","Hidden clues, phone tricks & misdirection","Multi-step rooms, camera chaos & locks"};
+        String[] names={"STARTER MAYHEM","SNEAKY OBJECTS","WEIRD EXPERIMENTS","NEON ARCADE","CHAOS LAB"};
+        String[] subs={"Hands, gravity, timing & trouble","Hidden clues, phone tricks & misdirection","Multi-step rooms, camera chaos & locks","Patterns, dials, magnets & visual tricks","Layered logic, memory & multi-step finales"};
         mangaTxt(c,names[levelPage],getWidth()/2f,getHeight()*.060f,29,Color.WHITE,Paint.Align.CENTER);
         wrap(c,subs[levelPage],getWidth()/2f,getHeight()*.095f,getWidth()*.80f,16,C("#D7E8FF"));
         neonChip(c,getWidth()*.39f,getHeight()*.125f,getWidth()*.22f,dp(30),C("#111936"),C("#FFE94D"));
-        mangaTxt(c,"AREA "+(levelPage+1)+" / 3",getWidth()/2f,getHeight()*.145f,14,C("#FFE94D"),Paint.Align.CENTER);
+        mangaTxt(c,"AREA "+(levelPage+1)+" / "+AREA_COUNT,getWidth()/2f,getHeight()*.145f,14,C("#FFE94D"),Paint.Align.CENTER);
         int startLevel=levelPage*LEVELS_PER_PAGE+1;
         int cols=3, rows=4; float gap=dp(12); float cell=(getWidth()-dp(48)-gap*(cols-1))/cols; float top=getHeight()*.19f;
         for(int slot=0;slot<LEVELS_PER_PAGE;slot++){
@@ -467,8 +546,8 @@ public class GameView extends View implements SensorEventListener {
             boolean done=prefs.getBoolean("level_"+level,false);float wob=((slot%3)-1)*dp(2);Path q=cutPanel(x,y+wob,cell,cell,dp(12));p.setStyle(Paint.Style.FILL);p.setColor(done?C("#DFFF00"):C("#111936"));c.drawPath(q,p);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(dp(3));p.setColor(done?C("#39F7FF"):C("#FF2EA6"));c.drawPath(q,p);mangaTxt(c,String.valueOf(level),x+cell/2,y+wob+cell*.61f,20,done?C("#080B18"):Color.WHITE,Paint.Align.CENTER);
         }
         if(levelPage>0) button(c,"‹",getWidth()*.06f,getHeight()*.82f,getWidth()*.18f,dp(56),C("#39F7FF"));
-        if(levelPage<2) button(c,"›",getWidth()*.76f,getHeight()*.82f,getWidth()*.18f,dp(56),C("#FF5BAA"));
-        button(c,"BACK",getWidth()*.30f,getHeight()*.90f,getWidth()*.40f,dp(56),C("#FFE94D"));
+        if(levelPage<AREA_COUNT-1) button(c,"›",getWidth()*.76f,getHeight()*.82f,getWidth()*.18f,dp(56),C("#FF5BAA"));
+        button(c,T("BACK"),getWidth()*.30f,getHeight()*.90f,getWidth()*.40f,dp(56),C("#FFE94D"));
     }
 
     private void drawFakeAd(Canvas c){
@@ -499,6 +578,9 @@ public class GameView extends View implements SensorEventListener {
             case 21:l21(c);break; case 22:l22(c);break; case 23:l23(c);break; case 24:l24(c);break; case 25:l25(c);break;
             case 26:l26(c);break; case 27:l27(c);break; case 28:l28(c);break; case 29:l29(c);break; case 30:l30(c);break;
             case 31:l31(c);break; case 32:l32(c);break; case 33:l33(c);break; case 34:l34(c);break; case 35:l35(c);break;
+            case 36:l36(c);break; case 37:l37(c);break; case 38:l38(c);break; case 39:l39(c);break; case 40:l40(c);break;
+            case 41:l41(c);break; case 42:l42(c);break; case 43:l43(c);break; case 44:l44(c);break; case 45:l45(c);break;
+            case 46:l46(c);break; case 47:l47(c);break; case 48:l48(c);break; case 49:l49(c);break; case 50:l50(c);break;
         }
     }
 
@@ -575,8 +657,8 @@ public class GameView extends View implements SensorEventListener {
             c.save();c.rotate(80*meltT,cx+dp(35),bottom-dp(40));drawCarrot(c,cx+dp(35)+dp(35)*meltT,bottom-dp(75)+dp(85)*meltT,.55f);c.restore();
         }
         if(snowEasterPhase==0){if(!snowNose)drawCarrot(c,carrotX,carrotY,.72f);if(!snowEye1){p.setStyle(Paint.Style.FILL);p.setColor(C("#25242D"));c.drawCircle(stone1X,stone1Y,dp(16),p);}if(!snowEye2){p.setColor(C("#25242D"));c.drawCircle(stone2X,stone2Y,dp(16),p);}mangaTxt(c,"MAKE HIM A FACE",getWidth()/2f,getHeight()*.875f,19,Color.WHITE,Paint.Align.CENTER);}
-        if(snowEasterPhase==1){speech(c,"No! Lì proprio no!",getWidth()*.12f,getHeight()*.255f,getWidth()*.76f,dp(92));if(now-snowEasterAt>1250){snowEasterPhase=2;snowEasterAt=now;}}else if(snowEasterPhase==2&&meltT>=1f){snowEasterPhase=3;snowEasterAt=now;}
-        if(snowEasterPhase==3){p.setStyle(Paint.Style.FILL);p.setColor(Color.argb(225,4,6,18));c.drawRect(0,0,getWidth(),getHeight(),p);mangaTxt(c,"TOTAL MELTDOWN",getWidth()/2f,getHeight()*.37f,35,C("#FF2EA6"),Paint.Align.CENTER);wrap(c,"That was definitely the wrong end.",getWidth()/2f,getHeight()*.45f,getWidth()*.78f,21,Color.WHITE);button(c,"RETRY",getWidth()*.18f,getHeight()*.58f,getWidth()*.64f,dp(66),C("#DFFF00"));button(c,"MENU",getWidth()*.18f,getHeight()*.68f,getWidth()*.64f,dp(60),C("#39F7FF"));}
+        if(snowEasterPhase==1){speech(c,T("SNOW_NO"),getWidth()*.12f,getHeight()*.255f,getWidth()*.76f,dp(92));if(now-snowEasterAt>1250){snowEasterPhase=2;snowEasterAt=now;}}else if(snowEasterPhase==2&&meltT>=1f){snowEasterPhase=3;snowEasterAt=now;}
+        if(snowEasterPhase==3){p.setStyle(Paint.Style.FILL);p.setColor(Color.argb(225,4,6,18));c.drawRect(0,0,getWidth(),getHeight(),p);mangaTxt(c,"TOTAL MELTDOWN",getWidth()/2f,getHeight()*.37f,35,C("#FF2EA6"),Paint.Align.CENTER);wrap(c,"That was definitely the wrong end.",getWidth()/2f,getHeight()*.45f,getWidth()*.78f,21,Color.WHITE);button(c,T("RETRY"),getWidth()*.18f,getHeight()*.58f,getWidth()*.64f,dp(66),C("#DFFF00"));button(c,"MENU",getWidth()*.18f,getHeight()*.68f,getWidth()*.64f,dp(60),C("#39F7FF"));}
         if(snowEye1&&snowEye2&&snowNose&&snowSmile&&snowEasterPhase==0)solved();
     }
     private void l22(Canvas c){ header(c,"He always chooses the WRONG door."); chibi(c,getWidth()*.5f,getHeight()*.40f,1.25f,true,true); speech(c,"I PICK LEFT!",getWidth()*.22f,getHeight()*.49f,getWidth()*.56f,dp(95)); button(c,"LEFT",getWidth()*.10f,getHeight()*.70f,getWidth()*.34f,dp(64),C("#FF8D7C")); button(c,"RIGHT",getWidth()*.56f,getHeight()*.70f,getWidth()*.34f,dp(64),C("#39F7FF")); wrap(c,"If his choice is always wrong, which door is safe?",getWidth()/2f,getHeight()*.84f,getWidth()*.82f,19,C("#3F4156")); if(oppositeChoice==1)solved(); }
@@ -748,6 +830,23 @@ public class GameView extends View implements SensorEventListener {
         for(int i=0;i<3;i++)drawFoundPiece(c,forgeMask,i);drawPlacedKey(c);keyProgress(c,forgeMask&7,3);
         if(foundPlacedMask==7){door(c,getWidth()*.84f,getHeight()*.62f,getWidth()*.17f,getHeight()*.17f);mangaTxt(c,"DRAG IT TO THE DOOR",getWidth()/2f,getHeight()*.84f,17,C("#DFFF00"),Paint.Align.CENTER);if(Math.hypot(finalKeyX-getWidth()*.84f,finalKeyY-getHeight()*.62f)<dp(58))solved();}
     }
+
+    private void l36(Canvas c){header(c,"Copy the flashing switch order.");float[] xs={.25f,.50f,.75f};int[] cols={C("#39F7FF"),C("#FF2EA6"),C("#FFE94D")};for(int i=0;i<3;i++){p.setStyle(Paint.Style.FILL);p.setColor(cols[i]);c.drawCircle(getWidth()*xs[i],getHeight()*.53f,dp(44),p);mangaTxt(c,String.valueOf(i+1),getWidth()*xs[i],getHeight()*.54f+sp(8),21,C("#091020"),Paint.Align.CENTER);}mangaTxt(c,"2  →  1  →  3",getWidth()/2f,getHeight()*.70f,25,Color.WHITE,Paint.Align.CENTER);if(neonSwitchStep>=3)solved();}
+    private void l37(Canvas c){header(c,"Turn the dial to the glowing notch.");float cx=getWidth()*.5f,cy=getHeight()*.53f,r=dp(105);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(dp(12));p.setColor(C("#222A55"));c.drawCircle(cx,cy,r,p);p.setColor(C("#39F7FF"));c.drawArc(cx-r,cy-r,cx+r,cy+r,-38,12,false,p);double a=Math.toRadians(dialAngle);float px=cx+(float)Math.cos(a)*r*.72f,py=cy+(float)Math.sin(a)*r*.72f;p.setStrokeWidth(dp(8));p.setColor(C("#FFE94D"));c.drawLine(cx,cy,px,py,p);c.drawCircle(cx,cy,dp(18),p);if(Math.abs(((dialAngle+360)%360)-322)<8)solved();}
+    private void l38(Canvas c){header(c,"Use the magnet to steal the metal puck.");p.setStyle(Paint.Style.FILL);p.setColor(C("#9EA6B6"));c.drawCircle(metalX,metalY,dp(24),p);p.setColor(C("#FF2EA6"));c.drawRoundRect(magnetX-dp(38),magnetY-dp(24),magnetX+dp(38),magnetY+dp(24),dp(16),dp(16),p);mangaTxt(c,"MAG",magnetX,magnetY+sp(6),15,Color.WHITE,Paint.Align.CENTER);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(dp(4));p.setColor(C("#DFFF00"));c.drawCircle(getWidth()*.18f,getHeight()*.40f,dp(34),p);if(Math.hypot(magnetX-metalX,magnetY-metalY)<dp(95)){metalX+=(magnetX-metalX)*.10f;metalY+=(magnetY-metalY)*.10f;}if(Math.hypot(metalX-getWidth()*.18f,metalY-getHeight()*.40f)<dp(34))solved();}
+    private void l39(Canvas c){header(c,"Rotate the tiles until the path is continuous.");float startX=getWidth()*.18f,y=getHeight()*.53f,sz=dp(74);boolean ok=true;for(int i=0;i<4;i++){float x=startX+i*getWidth()*.21f;neonChip(c,x-sz/2,y-sz/2,sz,sz,C("#111936"),C("#39F7FF"));c.save();c.rotate(tileRot[i]*90,x,y);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(dp(10));p.setColor(C("#FFE94D"));c.drawLine(x-sz*.34f,y,x+sz*.34f,y,p);c.restore();if(tileRot[i]%2!=0)ok=false;}if(ok)solved();}
+    private void l40(Canvas c){header(c,"Search the room with the flashlight.");p.setStyle(Paint.Style.FILL);p.setColor(Color.argb(205,0,0,0));c.drawRect(0,getHeight()*.26f,getWidth(),getHeight(),p);Path cone=new Path();cone.moveTo(flashlightX,flashlightY);cone.lineTo(flashlightX-dp(110),flashlightY-dp(180));cone.lineTo(flashlightX+dp(110),flashlightY-dp(180));cone.close();p.setColor(Color.argb(150,255,233,77));c.drawPath(cone,p);mangaTxt(c,"★",getWidth()*.72f,getHeight()*.45f,34,C("#DFFF00"),Paint.Align.CENTER);if(Math.hypot(flashlightX-getWidth()*.72f,flashlightY-getHeight()*.63f)<dp(110)){hiddenMarkFound=true;}if(hiddenMarkFound){mangaTxt(c,"TAP THE STAR",getWidth()/2f,getHeight()*.76f,20,Color.WHITE,Paint.Align.CENTER);}}
+    private void l41(Canvas c){header(c,"Make both sides weigh the same.");mangaTxt(c,"LEFT  "+balanceLeft,getWidth()*.28f,getHeight()*.48f,25,C("#39F7FF"),Paint.Align.CENTER);mangaTxt(c,"RIGHT  "+balanceRight,getWidth()*.72f,getHeight()*.48f,25,C("#FF2EA6"),Paint.Align.CENTER);button(c,"+1",getWidth()*.12f,getHeight()*.60f,getWidth()*.30f,dp(60),C("#39F7FF"));button(c,"+2",getWidth()*.58f,getHeight()*.60f,getWidth()*.30f,dp(60),C("#FF5BAA"));if(balanceLeft==balanceRight&&balanceLeft>=4)solved();}
+    private void l42(Canvas c){header(c,"Repeat the color order.");int[] cols={C("#39F7FF"),C("#FF2EA6"),C("#FFE94D"),C("#DFFF00")};float[] xs={.18f,.39f,.61f,.82f};for(int i=0;i<4;i++){p.setColor(cols[i]);p.setStyle(Paint.Style.FILL);c.drawCircle(getWidth()*xs[i],getHeight()*.55f,dp(34),p);}mangaTxt(c,"YELLOW → CYAN → LIME → PINK",getWidth()/2f,getHeight()*.72f,17,Color.WHITE,Paint.Align.CENTER);if(colorSeqPos>=4)solved();}
+    private void l43(Canvas c){header(c,"The panel is mirrored.");String[] arr={"←","↑","→","↓"};float[] xs={.18f,.39f,.61f,.82f};for(int i=0;i<4;i++)button(c,arr[i],getWidth()*xs[i]-dp(32),getHeight()*.52f,dp(64),dp(64),i%2==0?C("#39F7FF"):C("#FF5BAA"));mangaTxt(c,"MIRROR:  →  ↓  ←  ↑",getWidth()/2f,getHeight()*.72f,19,C("#FFE94D"),Paint.Align.CENTER);if(mirrorStep>=4)solved();}
+    private void l44(Canvas c){header(c,"Reconnect the broken circuit.");float cx=getWidth()*.5f,cy=getHeight()*.55f;p.setStyle(Paint.Style.FILL);p.setColor(C("#FFE94D"));c.drawCircle(cx,cy,dp(28),p);float[][] n={{.22f,.43f},{.78f,.43f},{.50f,.72f}};for(int i=0;i<3;i++){float x=getWidth()*n[i][0],y=getHeight()*n[i][1];p.setColor((wireMask&(1<<i))!=0?C("#DFFF00"):C("#394064"));c.drawCircle(x,y,dp(30),p);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(dp(5));p.setColor((wireMask&(1<<i))!=0?C("#39F7FF"):C("#59617F"));c.drawLine(x,y,cx,cy,p);p.setStyle(Paint.Style.FILL);}if(wireMask==7)solved();}
+    private void l45(Canvas c){header(c,"Read the shapes, then enter the code.");mangaTxt(c,"▲   ●●●●●   ■■■",getWidth()/2f,getHeight()*.39f,26,Color.WHITE,Paint.Align.CENTER);mangaTxt(c,safeCode.isEmpty()?"_ _ _":safeCode,getWidth()/2f,getHeight()*.50f,28,C("#FFE94D"),Paint.Align.CENTER);drawKeypad(c);if(safeCode.equals("153"))solved();if(safeCode.length()>=3&&!safeCode.equals("153")){safeCode="";showToast("TRY AGAIN");}}
+    private void l46(Canvas c){header(c,"Peel away every layer.");int[] cols={C("#FF2EA6"),C("#39F7FF"),C("#FFE94D"),C("#DFFF00")};for(int i=peelLayers;i<4;i++){float off=(i-peelLayers)*dp(7);neonChip(c,getWidth()*.18f+off,getHeight()*.38f+off,getWidth()*.64f,dp(220),cols[i],C("#111936"));}mangaTxt(c,peelLayers<4?"SWIPE IT AWAY":"FOUND IT!",getWidth()/2f,getHeight()*.72f,23,Color.WHITE,Paint.Align.CENTER);if(peelLayers>=4){drawCompleteKey(c,getWidth()*.5f,getHeight()*.56f,.7f);if(System.currentTimeMillis()-roomStart>500)solved();}}
+    private void l47(Canvas c){header(c,"Watch the grid. Then repeat it.");float sx=getWidth()*.28f,sy=getHeight()*.39f,cell=dp(68),gap=dp(12);long now=System.currentTimeMillis();if(!gridReady&&now-gridShownAt>2600)gridReady=true;for(int i=0;i<6;i++){int row=i/3,col=i%3;float x=sx+col*(cell+gap),y=sy+row*(cell+gap);boolean lit=!gridReady&&(i==0||i==3||i==5||i==2);neonChip(c,x,y,cell,cell,lit?C("#FFE94D"):C("#111936"),lit?C("#FF2EA6"):C("#39F7FF"));}mangaTxt(c,gridReady?"YOUR TURN":"MEMORIZE",getWidth()/2f,getHeight()*.72f,22,Color.WHITE,Paint.Align.CENTER);if(gridMemPos>=4)solved();}
+    private void l48(Canvas c){header(c,"Hold both pads together.");float y=getHeight()*.55f;button(c,"HOLD",getWidth()*.08f,y,getWidth()*.34f,dp(80),C("#39F7FF"));button(c,"HOLD",getWidth()*.58f,y,getWidth()*.34f,dp(80),C("#FF5BAA"));boolean left=false,right=false;for(int i=0;i<pointerCount;i++){if(in(px[i],py[i],getWidth()*.08f,y,getWidth()*.42f,y+dp(80)))left=true;if(in(px[i],py[i],getWidth()*.58f,y,getWidth()*.92f,y+dp(80)))right=true;}if(left&&right){if(dualHoldStart==0)dualHoldStart=System.currentTimeMillis();}else dualHoldStart=0;long held=dualHoldStart==0?0:System.currentTimeMillis()-dualHoldStart;mangaTxt(c,(held/100)/10f+" / 1.5",getWidth()/2f,getHeight()*.72f,20,C("#FFE94D"),Paint.Align.CENTER);if(held>1500)solved();}
+    private void l49(Canvas c){header(c,"Only one shadow matches its door.");float y=getHeight()*.54f;for(int i=0;i<3;i++){float x=getWidth()*(.24f+i*.26f);door(c,x,y,getWidth()*.18f,getHeight()*.20f);p.setStyle(Paint.Style.FILL);p.setColor(Color.argb(100,0,0,0));float skew=(i==1?0:(i==0?-28:30));Path sh=new Path();sh.moveTo(x-dp(34),y+dp(78));sh.lineTo(x+dp(34),y+dp(78));sh.lineTo(x+dp(34)+skew,y+dp(115));sh.lineTo(x-dp(34)+skew,y+dp(115));sh.close();c.drawPath(sh,p);}if(shadowChoice==1)solved();}
+    private void l50(Canvas c){header(c,"Three visible steps. No guessing.");float W=getWidth(),H=getHeight();if(finalStage==0){neonChip(c,W*.28f,H*.43f,W*.44f,dp(95),C("#FF2EA6"),C("#39F7FF"));mangaTxt(c,"OPEN LATCH",W*.5f,H*.485f,20,Color.WHITE,Paint.Align.CENTER);}else if(finalStage==1){neonChip(c,W*.43f,finalLeverY,dp(90),dp(110),C("#39F7FF"),C("#FFE94D"));mangaTxt(c,"PULL",W*.5f,finalLeverY+dp(62),18,C("#07101A"),Paint.Align.CENTER);}else{p.setStyle(Paint.Style.FILL);p.setColor(C("#FF2EA6"));c.drawCircle(W*.5f,H*.54f,dp(72),p);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(dp(8));p.setColor(C("#DFFF00"));c.drawCircle(W*.5f,H*.54f,dp(88),p);mangaTxt(c,"CORE "+finalTapCount+"/3",W*.5f,H*.55f+sp(7),20,Color.WHITE,Paint.Align.CENTER);if(finalTapCount>=3)solved();}}
+
     private void speedBurst(Canvas c,float cx,float cy,float radius){
         p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(dp(3)); p.setColor(C("#EAF0FF"));
         for(int i=0;i<18;i++){
@@ -771,16 +870,17 @@ public class GameView extends View implements SensorEventListener {
     @Override public boolean onTouchEvent(MotionEvent e){
         cache(e); int a=e.getActionMasked(); int idx=e.getActionIndex(); float x=e.getX(idx),y=e.getY(idx);
         if(a==MotionEvent.ACTION_DOWN){downX=x;downY=y;downAt=System.currentTimeMillis();}
+        if(screen==-1){if(a==MotionEvent.ACTION_DOWN){String[] codes={"en","de","it","es","pt","fr","zh","ja","ru"};int cols=2;float bw=getWidth()*.39f,bh=dp(62),gap=dp(14),sx=getWidth()*.075f,sy=getHeight()*.23f;for(int i=0;i<codes.length;i++){int row=i/cols,col=i%cols;float bx=sx+col*(bw+getWidth()*.07f),by=sy+row*(bh+gap);if(in(x,y,bx,by,bx+bw,by+bh)){languageCode=codes[i];prefs.edit().putString("language",languageCode).apply();screen=0;((MainActivity)getContext()).requestStartupCameraPermission();invalidate();return true;}}}return true;}
         if(screen==0){ if(a==MotionEvent.ACTION_DOWN&&y<getHeight()*.30f){homeSecretTaps++;if(homeSecretTaps>=7){homeSecretUntil=System.currentTimeMillis()+2600;homeSecretTaps=0;}} if(a==MotionEvent.ACTION_DOWN&&in(x,y,getWidth()*.18f,getHeight()*.67f,getWidth()*.82f,getHeight()*.78f))gotoLevel(1); else if(a==MotionEvent.ACTION_DOWN&&in(x,y,getWidth()*.18f,getHeight()*.78f,getWidth()*.82f,getHeight()*.88f)){screen=90;levelPage=0;((MainActivity)getContext()).syncMusicForScreen(90);} invalidate(); return true; }
         if(screen==90){
             if(a==MotionEvent.ACTION_DOWN){int cols=3;float gap=dp(12),cell=(getWidth()-dp(48)-gap*2)/3,top=getHeight()*.19f;int startLevel=levelPage*LEVELS_PER_PAGE+1;for(int slot=0;slot<LEVELS_PER_PAGE;slot++){int level=startLevel+slot;if(level>TOTAL_LEVELS)continue;int row=slot/cols,col=slot%cols;float lx=dp(24)+col*(cell+gap),ty=top+row*(cell+gap*1.08f);if(in(x,y,lx,ty,lx+cell,ty+cell)){gotoLevel(level);return true;}}
                 if(levelPage>0&&in(x,y,getWidth()*.04f,getHeight()*.80f,getWidth()*.26f,getHeight()*.88f)){levelPage--;invalidate();return true;}
-                if(levelPage<2&&in(x,y,getWidth()*.74f,getHeight()*.80f,getWidth()*.96f,getHeight()*.88f)){levelPage++;invalidate();return true;}
+                if(levelPage<AREA_COUNT-1&&in(x,y,getWidth()*.74f,getHeight()*.80f,getWidth()*.96f,getHeight()*.88f)){levelPage++;invalidate();return true;}
                 if(y>getHeight()*.885f){screen=0;invalidate();return true;}}
             return true;
         }
         if(screen==95){if(a==MotionEvent.ACTION_DOWN&&System.currentTimeMillis()-fakeAdShownAt>=3000L&&in(x,y,getWidth()*.22f,getHeight()*.74f,getWidth()*.78f,getHeight()*.86f)){int next=pendingScreenAfterAd;pendingScreenAfterAd=-1;screen=next;if(screen>=1&&screen<=TOTAL_LEVELS){roomStart=System.currentTimeMillis();resetLevel();}((MainActivity)getContext()).syncMusicForScreen(screen);invalidate();}return true;}
-        if(screen==99){ if(a==MotionEvent.ACTION_DOWN){screen=90;levelPage=2;invalidate();}return true; }
+        if(screen==99){ if(a==MotionEvent.ACTION_DOWN){screen=90;levelPage=AREA_COUNT-1;invalidate();}return true; }
         if(hintOpen){
             if(a==MotionEvent.ACTION_DOWN){float hx=getWidth()*.07f,hy=getHeight()*.24f,hw=getWidth()*.86f,hh=getHeight()*.38f;if(in(x,y,hx+hw-dp(78),hy,hx+hw,hy+dp(78))||in(x,y,hx+hw*.24f,hy+hh-dp(90),hx+hw*.76f,hy+hh)){hintOpen=false;invalidate();}}
             return true;
@@ -847,6 +947,21 @@ public class GameView extends View implements SensorEventListener {
                 if(a==MotionEvent.ACTION_DOWN){if(beginFoundPieceDrag(x,y,forgeMask)){}else if(foundPlacedMask==7&&Math.hypot(x-finalKeyX,y-finalKeyY)<dp(85)){finalKeyDrag=true;foundDX=x-finalKeyX;foundDY=y-finalKeyY;}else if(Math.hypot(x-forgePanelX,y-getHeight()*.43f)<dp(75)){forgePanelDrag=true;keyDX=x-forgePanelX;}else if(in(x,y,getWidth()*.43f,getHeight()*.36f,getWidth()*.70f,getHeight()*.52f)){forgeGemTaps++;}else if(Math.abs(x-getWidth()*.82f)<dp(55)&&Math.abs(y-forgePullY)<dp(60)){forgePullDrag=true;keyDY=y-forgePullY;}}
                 if(a==MotionEvent.ACTION_MOVE){if(foundDrag>0)moveFoundPiece(x,y);else if(finalKeyDrag){finalKeyX=x-foundDX;finalKeyY=y-foundDY;}else if(forgePanelDrag)forgePanelX=x-keyDX;else if(forgePullDrag)forgePullY=Math.max(getHeight()*.40f,Math.min(getHeight()*.62f,y-keyDY));}
                 if(a==MotionEvent.ACTION_UP||a==MotionEvent.ACTION_CANCEL){endFoundPieceDrag();forgePanelDrag=false;forgePullDrag=false;finalKeyDrag=false;}break;
+            case 36: if(a==MotionEvent.ACTION_DOWN){float[] xs36={.25f,.50f,.75f};int[] tgt36={1,0,2};for(int i=0;i<3;i++)if(Math.hypot(x-getWidth()*xs36[i],y-getHeight()*.53f)<dp(55)){if(neonSwitchStep<3&&i==tgt36[neonSwitchStep])neonSwitchStep++;else{neonSwitchStep=0;showToast("RESET");}break;}}break;
+            case 37: {float cx=getWidth()*.5f,cy=getHeight()*.53f;if(a==MotionEvent.ACTION_DOWN&&Math.hypot(x-cx,y-cy)<dp(130)){dialDrag=true;lastDialAngle=(float)Math.toDegrees(Math.atan2(y-cy,x-cx));}if(a==MotionEvent.ACTION_MOVE&&dialDrag){float na=(float)Math.toDegrees(Math.atan2(y-cy,x-cx));dialAngle=(dialAngle+(na-lastDialAngle)+360)%360;lastDialAngle=na;}if(a==MotionEvent.ACTION_UP||a==MotionEvent.ACTION_CANCEL)dialDrag=false;}break;
+            case 38: if(a==MotionEvent.ACTION_DOWN&&Math.hypot(x-magnetX,y-magnetY)<dp(60)){magnetDrag=true;keyDX=x-magnetX;keyDY=y-magnetY;}if(a==MotionEvent.ACTION_MOVE&&magnetDrag){magnetX=x-keyDX;magnetY=y-keyDY;}if(a==MotionEvent.ACTION_UP||a==MotionEvent.ACTION_CANCEL)magnetDrag=false;break;
+            case 39: if(a==MotionEvent.ACTION_DOWN){float startX=getWidth()*.18f,y39=getHeight()*.53f;for(int i=0;i<4;i++){float xx=startX+i*getWidth()*.21f;if(Math.abs(x-xx)<dp(42)&&Math.abs(y-y39)<dp(42)){tileRot[i]=(tileRot[i]+1)%4;break;}}}break;
+            case 40: if(a==MotionEvent.ACTION_DOWN&&Math.hypot(x-flashlightX,y-flashlightY)<dp(70)){flashlightDrag=true;keyDX=x-flashlightX;keyDY=y-flashlightY;}if(a==MotionEvent.ACTION_MOVE&&flashlightDrag){flashlightX=x-keyDX;flashlightY=y-keyDY;}if(a==MotionEvent.ACTION_UP||a==MotionEvent.ACTION_CANCEL)flashlightDrag=false;if(hiddenMarkFound&&a==MotionEvent.ACTION_DOWN&&Math.hypot(x-getWidth()*.72f,y-getHeight()*.45f)<dp(50))solved();break;
+            case 41: if(a==MotionEvent.ACTION_DOWN){if(in(x,y,getWidth()*.12f,getHeight()*.60f,getWidth()*.42f,getHeight()*.60f+dp(60)))balanceLeft++;else if(in(x,y,getWidth()*.58f,getHeight()*.60f,getWidth()*.88f,getHeight()*.60f+dp(60)))balanceRight+=2;if(balanceLeft>8)balanceLeft=0;if(balanceRight>8)balanceRight=0;}break;
+            case 42: if(a==MotionEvent.ACTION_DOWN){float[] xs42={.18f,.39f,.61f,.82f};int hit=-1;for(int i=0;i<4;i++)if(Math.hypot(x-getWidth()*xs42[i],y-getHeight()*.55f)<dp(45))hit=i;if(hit>=0){if(colorSeqPos<4&&hit==colorSeq[colorSeqPos])colorSeqPos++;else{colorSeqPos=0;showToast("RESET");}}}break;
+            case 43: if(a==MotionEvent.ACTION_DOWN){float[] xs43={.18f,.39f,.61f,.82f};int hit=-1;for(int i=0;i<4;i++)if(Math.abs(x-getWidth()*xs43[i])<dp(45)&&Math.abs(y-getHeight()*.55f)<dp(55))hit=i;if(hit>=0){if(mirrorStep<4&&hit==mirrorSeq[mirrorStep])mirrorStep++;else{mirrorStep=0;showToast("RESET");}}}break;
+            case 44: if(a==MotionEvent.ACTION_DOWN){float[][] n44={{.22f,.43f},{.78f,.43f},{.50f,.72f}};for(int i=0;i<3;i++)if(Math.hypot(x-getWidth()*n44[i][0],y-getHeight()*n44[i][1])<dp(45)){wireMask|=(1<<i);break;}}break;
+            case 45: if(a==MotionEvent.ACTION_DOWN&&y>getHeight()*.58f){float top45=getHeight()*.62f;for(int rr=0;rr<3;rr++)for(int cc=0;cc<3;cc++){float kx=getWidth()*.22f+cc*getWidth()*.28f,ky=top45+rr*dp(62);if(Math.hypot(x-kx,y-ky)<dp(34)&&safeCode.length()<3)safeCode+=String.valueOf(rr*3+cc+1);}}break;
+            case 46: if(a==MotionEvent.ACTION_UP&&Math.hypot(x-downX,y-downY)>dp(70))peelLayers=Math.min(4,peelLayers+1);break;
+            case 47: if(gridReady&&a==MotionEvent.ACTION_DOWN){float sx47=getWidth()*.28f,sy47=getHeight()*.39f,cell47=dp(68),gap47=dp(12);int hit=-1;for(int i=0;i<6;i++){int rr=i/3,cc=i%3;float bx=sx47+cc*(cell47+gap47),by=sy47+rr*(cell47+gap47);if(in(x,y,bx,by,bx+cell47,by+cell47))hit=i;}if(hit>=0){if(gridMemPos<4&&hit==gridSeq[gridMemPos])gridMemPos++;else{gridMemPos=0;showToast("RESET");}}}break;
+            case 48: break;
+            case 49: if(a==MotionEvent.ACTION_DOWN){float yy=getHeight()*.54f;for(int i=0;i<3;i++){float xx=getWidth()*(.24f+i*.26f);if(Math.hypot(x-xx,y-yy)<dp(60)){shadowChoice=i;break;}}}break;
+            case 50: if(finalStage==0&&a==MotionEvent.ACTION_DOWN&&in(x,y,getWidth()*.28f,getHeight()*.43f,getWidth()*.72f,getHeight()*.43f+dp(95)))finalStage=1;else if(finalStage==1){if(a==MotionEvent.ACTION_DOWN&&Math.abs(x-getWidth()*.5f)<dp(60)&&Math.abs(y-finalLeverY)<dp(80)){finalLeverDrag=true;keyDY=y-finalLeverY;}if(a==MotionEvent.ACTION_MOVE&&finalLeverDrag)finalLeverY=Math.max(getHeight()*.42f,Math.min(getHeight()*.64f,y-keyDY));if((a==MotionEvent.ACTION_UP||a==MotionEvent.ACTION_CANCEL)&&finalLeverDrag){finalLeverDrag=false;if(finalLeverY>getHeight()*.58f)finalStage=2;}}else if(finalStage==2&&a==MotionEvent.ACTION_DOWN&&Math.hypot(x-getWidth()*.5f,y-getHeight()*.54f)<dp(95))finalTapCount++;break;
 
         }
         invalidate(); return true;

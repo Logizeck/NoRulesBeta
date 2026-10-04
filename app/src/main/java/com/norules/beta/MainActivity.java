@@ -20,6 +20,7 @@ public class MainActivity extends Activity {
     private MediaPlayer bgm;
     private boolean musicWanted = true;
     private boolean audioPuzzle = false;
+    private boolean pendingSelfieAfterPermission = false;
 
     @Override public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -29,9 +30,6 @@ public class MainActivity extends Activity {
         gameView = new GameView(this);
         setContentView(gameView);
         prepareOptionalBgm();
-        if (Build.VERSION.SDK_INT >= 23 && checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(new String[]{Manifest.permission.CAMERA}, REQ_CAMERA_PERMISSION);
-        }
 
         if (Build.VERSION.SDK_INT >= 34) {
             screenCaptureCallback = new Activity.ScreenCaptureCallback() {
@@ -65,8 +63,17 @@ public class MainActivity extends Activity {
         }
     }
 
+
+    public void requestStartupCameraPermission() {
+        pendingSelfieAfterPermission = false;
+        if (Build.VERSION.SDK_INT >= 23 && checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{Manifest.permission.CAMERA}, REQ_CAMERA_PERMISSION);
+        }
+    }
+
     public void startSelfieCapture() {
         if (Build.VERSION.SDK_INT >= 23 && checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            pendingSelfieAfterPermission = true;
             requestPermissions(new String[]{Manifest.permission.CAMERA}, REQ_CAMERA_PERMISSION);
             return;
         }
@@ -84,8 +91,10 @@ public class MainActivity extends Activity {
     @Override public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (requestCode == REQ_CAMERA_PERMISSION) {
-            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) launchSelfieCamera();
-            else if (gameView != null) gameView.onSelfieCancelled();
+            boolean granted = grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED;
+            if (granted && pendingSelfieAfterPermission) launchSelfieCamera();
+            else if (!granted && pendingSelfieAfterPermission && gameView != null) gameView.onSelfieCancelled();
+            pendingSelfieAfterPermission = false;
         }
     }
 

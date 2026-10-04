@@ -1,15 +1,21 @@
-# NO RULES — B0.3 beta
+# NO RULES — Beta B0.4
 
-Focus: themed world structure, varied scene backgrounds, simulated ad cadence, and the manga/chibi + toy-like visual identity selected during the profit/positioning design discussion.
+This source build expands the test campaign from 35 to 50 levels and keeps the 12-level themed-area structure.
 
-## Major changes
-- Level Select split into 3 themed pages of 12 slots each.
-- Area 1: STARTER MAYHEM (1–12).
-- Area 2: SNEAKY OBJECTS (13–24).
-- Area 3: WEIRD EXPERIMENTS (25–35 + one future slot).
-- Puzzle scenes no longer share one universal background: winter, photo booth, dojo/comic, workshop and digital-lab themes are selected by puzzle type.
-- Simulated interstitial ad test: after a completed level, show the fake ad if either 5 levels have completed since the previous ad OR 3 minutes have elapsed since the previous ad. Whichever condition happens first triggers at the next level completion. The 3-minute clock and level counter reset when the ad is shown.
-- Fake ad can be closed after 3 seconds and immediately continues to the next level.
-- No real ad SDK/network is included.
+## Main changes
+- 15 new playable puzzles (levels 36–50)
+- 5 themed level-select areas (12 slots each)
+- additional themed backgrounds for arcade/lab puzzle families
+- simulated interstitial ad logic retained: every 5 completed levels OR 3 minutes since the previous ad, shown after a level, closeable after 3 seconds; both counters reset when shown
+- startup language selector: English, German, Italian, Spanish, Portuguese, French, Chinese, Japanese, Russian
+- startup camera permission flow moved after language choice
+- core navigation UI localized; snowman meltdown line and Retry/Menu are localized
+- clearer progressive hint system: repeated hints become more explicit
+- neon NR launcher icon applied to all density buckets
+- stronger common-UI contrast (dark panels + high-contrast text / neon borders)
 
-Build via the existing GitHub Actions workflow.
+## Localization status
+The localization framework is active and the core navigation / special snowman fail sequence is localized in all 9 test languages. Level-authored titles, subtitles and most puzzle-specific hint prose are still English in B0.4; these are routed through the new language infrastructure for the next translation pass.
+
+## Build
+Upload/replace these sources in `Logizeck/NoRulesBeta` and run the existing GitHub Actions workflow. Download `NoRulesBeta-APK` and install `app-debug.apk`.

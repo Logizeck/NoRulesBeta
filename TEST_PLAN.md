@@ -1,10 +1,31 @@
-# B0.3 TEST PLAN
+# B0.4 test plan
 
-1. Level Select: confirm 3 pages, 12 slots/page, navigation arrows, and correct level numbers.
-2. Backgrounds: compare snowman (#21), selfie (#27), dojo-style levels, key/object rooms, and digital puzzles. They should visibly differ.
-3. Simulated ad — level condition: complete 5 levels before 3 minutes; ad must appear after the fifth completion.
-4. Simulated ad — timer condition: wait at least 3 minutes since the last ad/app start, then complete a level; ad must appear.
-5. Ad close: close control must remain locked for ~3 s, then continue directly to the pending next level.
-6. After an ad, confirm neither another five-level ad nor the three-minute ad fires prematurely: both counters restart from that ad.
-7. Check menu/hint readability on all new backgrounds.
-8. Re-test levels 21, 24, 27–35 for collisions or unreadable UI over the new scene themes.
+## Priority regression
+1. Launch after clearing app data: language selection appears before gameplay.
+2. Choosing a language is persisted after restart.
+3. Camera permission appears immediately after language choice, not when first entering level 27.
+4. Snowman fail speech uses the selected language.
+5. Text on menu/header/hint/ad panels remains readable against its background.
+6. Fake ad: trigger after 5 completed levels OR after 3 minutes; close only after 3 seconds; timer and completed-level counter reset after the ad.
+
+## New content 36–50
+36 Neon Switches — tap 2,1,3.
+37 Safe Dial — drag the dial to the cyan notch.
+38 Magnet Heist — drag magnet close to metal puck and pull puck to the target.
+39 Rotate the Path — rotate all tiles horizontal.
+40 Flashlight — drag light to reveal the hidden star, then tap it.
+41 Balance It — build equal totals on both sides.
+42 Color Order — replay the displayed color order.
+43 Mirror Panel — solve the mirrored arrow order.
+44 Broken Circuit — activate all three nodes.
+45 Secret Code — read shape counts and enter 153.
+46 Peel the Poster — perform repeated swipes until all layers are removed.
+47 Memory Grid — memorize highlighted squares and replay.
+48 Two-Hand Lock — hold both pads simultaneously for 1.5 s.
+49 Shadow Doors — select the door whose shadow matches the frame.
+50 Chaos Core — open latch, pull lever, tap core 3 times.
+
+## Level select
+- Pages contain 12 slots each.
+- Pages 1–4 contain levels 1–48.
+- Page 5 contains levels 49–50 and future empty slots.
