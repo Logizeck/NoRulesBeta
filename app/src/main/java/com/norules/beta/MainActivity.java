@@ -29,6 +29,9 @@ public class MainActivity extends Activity {
         gameView = new GameView(this);
         setContentView(gameView);
         prepareOptionalBgm();
+        if (Build.VERSION.SDK_INT >= 23 && checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{Manifest.permission.CAMERA}, REQ_CAMERA_PERMISSION);
+        }
 
         if (Build.VERSION.SDK_INT >= 34) {
             screenCaptureCallback = new Activity.ScreenCaptureCallback() {

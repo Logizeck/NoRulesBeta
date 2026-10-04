@@ -1,3 +1,7 @@
+No Rules Beta B0.1
+
+Neon-fluo art direction refresh across core UI, buttons, doors, keys, title screen, and overlays.
+
 # NO RULES — Beta 0.5.3
 
 Corrective visual/UI build focused on consistency and puzzle readability.

@@ -239,33 +239,36 @@ public class GameView extends View implements SensorEventListener {
     }
 
     private void instruction(Canvas c,String text){
-        float x=getWidth()*.095f,y=getHeight()*.785f,w=getWidth()*.81f,h=dp(66);
-        rr(c,x+dp(5),y+dp(6),w,h,dp(18),C("#D7AA3A"));rr(c,x,y,w,h,dp(18),C("#FFFDF8"));
-        p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(dp(3));p.setColor(C("#24243A"));c.drawRoundRect(x,y,x+w,y+h,dp(18),dp(18),p);
-        p.setStyle(Paint.Style.FILL);p.setColor(C("#FFCA4B"));c.drawCircle(x+dp(28),y+h/2,dp(16),p);mangaTxt(c,"!",x+dp(28),y+h/2+sp(7),18,C("#24243A"),Paint.Align.CENTER);
-        wrap(c,text,x+w*.57f,y+dp(39),w-dp(82),18,C("#343548"));
+        float x=getWidth()*.085f,y=getHeight()*.785f,w=getWidth()*.83f,h=dp(74);
+        rr(c,x+dp(6),y+dp(8),w,h,dp(20),C("#0A0F22"));
+        rr(c,x,y,w,h,dp(20),C("#11183B"));
+        p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(dp(3));p.setColor(C("#39F7FF"));c.drawRoundRect(x,y,x+w,y+h,dp(20),dp(20),p);
+        p.setStyle(Paint.Style.FILL);p.setColor(C("#FFE94D"));c.drawCircle(x+dp(31),y+h/2,dp(18),p);mangaTxt(c,"!",x+dp(31),y+h/2+sp(7),19,C("#10142B"),Paint.Align.CENTER);
+        wrap(c,text,x+w*.58f,y+dp(43),w-dp(90),19,Color.WHITE);
     }
 
     private void speedBg(Canvas c){
-        c.drawColor(C("#FFF1D2"));
+        c.drawColor(C("#090D1E"));
         float cx=getWidth()/2f, cy=getHeight()*.54f;
-        p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(dp(2)); p.setColor(C("#F3C24B"));
-        for(int i=0;i<24;i++){double a=i*Math.PI*2/24.0+((i%3)-1)*.018;float r1=getWidth()*(.24f+(i%4)*.012f),r2=getWidth()*(.67f+(i%5)*.015f);c.drawLine(cx+(float)Math.cos(a)*r1,cy+(float)Math.sin(a)*r1*.78f,cx+(float)Math.cos(a)*r2,cy+(float)Math.sin(a)*r2*.78f,p);}
-        p.setStyle(Paint.Style.FILL);p.setColor(C("#F8E4AF"));c.drawOval(cx-getWidth()*.34f,cy-getHeight()*.18f,cx+getWidth()*.34f,cy+getHeight()*.18f,p);
-        p.setColor(C("#FF7A89"));c.drawCircle(getWidth()*.08f,getHeight()*.62f,dp(10),p);p.setColor(C("#73D8C2"));c.drawCircle(getWidth()*.91f,getHeight()*.34f,dp(8),p);
-        p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(dp(5));p.setStrokeCap(Paint.Cap.ROUND);p.setColor(C("#8C77D9"));Path z=new Path();z.moveTo(getWidth()*.07f,getHeight()*.38f);z.lineTo(getWidth()*.12f,getHeight()*.35f);z.lineTo(getWidth()*.10f,getHeight()*.42f);z.lineTo(getWidth()*.15f,getHeight()*.39f);c.drawPath(z,p);p.setStrokeCap(Paint.Cap.BUTT);
+        p.setStyle(Paint.Style.FILL);p.setColor(C("#141B45"));c.drawOval(cx-getWidth()*.35f,cy-getHeight()*.19f,cx+getWidth()*.35f,cy+getHeight()*.19f,p);
+        p.setColor(Color.argb(120,255,0,160));c.drawOval(cx-getWidth()*.19f,cy-getHeight()*.10f,cx+getWidth()*.19f,cy+getHeight()*.10f,p);
+        int[] rays={C("#39F7FF"),C("#FF2EA6"),C("#FFE94D")};
+        p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(dp(3));
+        for(int i=0;i<24;i++){double a=i*Math.PI*2/24.0+((i%3)-1)*.018;float r1=getWidth()*(.22f+(i%4)*.011f),r2=getWidth()*(.67f+(i%5)*.013f);p.setColor(rays[i%3]);c.drawLine(cx+(float)Math.cos(a)*r1,cy+(float)Math.sin(a)*r1*.78f,cx+(float)Math.cos(a)*r2,cy+(float)Math.sin(a)*r2*.78f,p);}
+        p.setStyle(Paint.Style.FILL);p.setColor(C("#FF2EA6"));c.drawCircle(getWidth()*.08f,getHeight()*.62f,dp(11),p);p.setColor(C("#39F7FF"));c.drawCircle(getWidth()*.91f,getHeight()*.34f,dp(9),p);p.setColor(C("#FFE94D"));c.drawCircle(getWidth()*.15f,getHeight()*.22f,dp(6),p);
+        p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(dp(6));p.setStrokeCap(Paint.Cap.ROUND);p.setColor(C("#9E7BFF"));Path z=new Path();z.moveTo(getWidth()*.07f,getHeight()*.38f);z.lineTo(getWidth()*.12f,getHeight()*.35f);z.lineTo(getWidth()*.10f,getHeight()*.42f);z.lineTo(getWidth()*.15f,getHeight()*.39f);c.drawPath(z,p);p.setColor(C("#39F7FF"));Path z2=new Path();z2.moveTo(getWidth()*.84f,getHeight()*.16f);z2.lineTo(getWidth()*.89f,getHeight()*.14f);z2.lineTo(getWidth()*.87f,getHeight()*.20f);z2.lineTo(getWidth()*.92f,getHeight()*.18f);c.drawPath(z2,p);p.setStrokeCap(Paint.Cap.BUTT);
     }
 
     private void header(Canvas c,String subtitle){
         float x=getWidth()*.045f,y=getHeight()*.020f,w=getWidth()*.91f,h=getHeight()*.145f;
-        rr(c,x+dp(6),y+dp(7),w,h,dp(22),C("#24243A"));rr(c,x,y,w,h,dp(22),C("#FFFDF8"));
-        p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(dp(3));p.setColor(C("#24243A"));c.drawRoundRect(x,y,x+w,y+h,dp(22),dp(22),p);
-        c.save();c.rotate(-2.2f,x+dp(54),y+dp(22));rr(c,x+dp(14),y+dp(7),dp(80),dp(29),dp(7),C("#F04444"));c.restore();
+        rr(c,x+dp(7),y+dp(8),w,h,dp(22),C("#040716"));rr(c,x,y,w,h,dp(22),C("#101734"));
+        p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(dp(3));p.setColor(C("#39F7FF"));c.drawRoundRect(x,y,x+w,y+h,dp(22),dp(22),p);
+        c.save();c.rotate(-2.2f,x+dp(54),y+dp(22));rr(c,x+dp(14),y+dp(7),dp(80),dp(29),dp(7),C("#FF2EA6"));c.restore();
         mangaTxt(c,"#"+screen,x+dp(54),y+dp(29),15,Color.WHITE,Paint.Align.CENTER);
-        mangaTxt(c,levelNames[screen],getWidth()/2f,y+dp(54),23,C("#24243A"),Paint.Align.CENTER);
-        wrap(c,subtitle,getWidth()/2f,y+dp(92),w-dp(42),18,C("#4A4B5E"));
-        button(c,"MENU",getWidth()*.045f,getHeight()*.178f,getWidth()*.225f,dp(50),C("#73D8C2"));
-        button(c,"HINT "+hints,getWidth()*.730f,getHeight()*.178f,getWidth()*.225f,dp(50),C("#FF7788"));
+        mangaTxt(c,levelNames[screen],getWidth()/2f,y+dp(54),24,Color.WHITE,Paint.Align.CENTER);
+        wrap(c,subtitle,getWidth()/2f,y+dp(92),w-dp(42),18,C("#D7E8FF"));
+        button(c,"MENU",getWidth()*.045f,getHeight()*.178f,getWidth()*.225f,dp(50),C("#39F7FF"));
+        button(c,"HINT "+hints,getWidth()*.730f,getHeight()*.178f,getWidth()*.225f,dp(50),C("#FF5BAA"));
     }
 
     private void chibi(Canvas c,float x,float y,float scale,boolean lookLeft,boolean angry){
@@ -278,10 +281,10 @@ public class GameView extends View implements SensorEventListener {
     }
 
     private void speech(Canvas c,String s,float x,float y,float w,float h){
-        rr(c,x+dp(5),y+dp(6),w,h,dp(22),C("#24243A"));rr(c,x,y,w,h,dp(22),Color.WHITE);
-        p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(dp(3));p.setColor(C("#24243A"));c.drawRoundRect(x,y,x+w,y+h,dp(22),dp(22),p);
-        Path t=new Path();t.moveTo(x+w*.29f,y+h-dp(1));t.lineTo(x+w*.43f,y+h-dp(1));t.lineTo(x+w*.34f,y+h+dp(24));t.close();p.setStyle(Paint.Style.FILL);p.setColor(Color.WHITE);c.drawPath(t,p);p.setStyle(Paint.Style.STROKE);p.setColor(C("#24243A"));p.setStrokeWidth(dp(3));c.drawPath(t,p);
-        wrap(c,s,x+w/2,y+dp(34),w-dp(28),17,C("#24243A"));
+        rr(c,x+dp(5),y+dp(6),w,h,dp(22),C("#060A19"));rr(c,x,y,w,h,dp(22),C("#F7F7FF"));
+        p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(dp(3));p.setColor(C("#39F7FF"));c.drawRoundRect(x,y,x+w,y+h,dp(22),dp(22),p);
+        Path t=new Path();t.moveTo(x+w*.29f,y+h-dp(1));t.lineTo(x+w*.43f,y+h-dp(1));t.lineTo(x+w*.34f,y+h+dp(24));t.close();p.setStyle(Paint.Style.FILL);p.setColor(C("#F7F7FF"));c.drawPath(t,p);p.setStyle(Paint.Style.STROKE);p.setColor(C("#39F7FF"));p.setStrokeWidth(dp(3));c.drawPath(t,p);
+        wrap(c,s,x+w/2,y+dp(34),w-dp(28),17,C("#11183B"));
     }
 
     private void showToast(String s){ toast=s; toastUntil=System.currentTimeMillis()+900; }
@@ -294,15 +297,16 @@ public class GameView extends View implements SensorEventListener {
 
     private void drawHintOverlay(Canvas c){
         if(!hintOpen || screen<1 || screen>TOTAL_LEVELS) return;
-        p.setColor(Color.argb(165,20,20,35)); p.setStyle(Paint.Style.FILL); c.drawRect(0,0,getWidth(),getHeight(),p);
+        p.setColor(Color.argb(185,4,6,18)); p.setStyle(Paint.Style.FILL); c.drawRect(0,0,getWidth(),getHeight(),p);
         float x=getWidth()*.07f, y=getHeight()*.24f, w=getWidth()*.86f, h=getHeight()*.38f;
-        rr(c,x,y,w,h,dp(24),Color.WHITE);
-        p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(dp(4)); p.setColor(C("#24243A")); c.drawRoundRect(x,y,x+w,y+h,dp(24),dp(24),p);
-        mangaTxt(c,"HINT",x+dp(24),y+dp(48),24,C("#E94C67"),Paint.Align.LEFT);
-        wrap(c,hintsText[screen],x+w/2,y+dp(100),w-dp(48),21,C("#24243A"));
-        rr(c,x+w-dp(62),y+dp(16),dp(46),dp(46),dp(14),C("#FF7A89"));
+        rr(c,x+dp(6),y+dp(8),w,h,dp(24),C("#040716"));
+        rr(c,x,y,w,h,dp(24),C("#11183B"));
+        p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(dp(4)); p.setColor(C("#39F7FF")); c.drawRoundRect(x,y,x+w,y+h,dp(24),dp(24),p);
+        mangaTxt(c,"HINT",x+dp(24),y+dp(48),24,C("#FFE94D"),Paint.Align.LEFT);
+        wrap(c,hintsText[screen],x+w/2,y+dp(100),w-dp(48),21,Color.WHITE);
+        rr(c,x+w-dp(62),y+dp(16),dp(46),dp(46),dp(14),C("#FF2EA6"));
         mangaTxt(c,"×",x+w-dp(39),y+dp(49),26,Color.WHITE,Paint.Align.CENTER);
-        button(c,"CLOSE",x+w*.25f,y+h-dp(72),w*.50f,dp(52),C("#FFCA4B"));
+        button(c,"CLOSE",x+w*.25f,y+h-dp(72),w*.50f,dp(52),C("#FFE94D"));
     }
 
     private void gotoLevel(int n){
@@ -351,29 +355,29 @@ public class GameView extends View implements SensorEventListener {
 
     private void drawHome(Canvas c){
         speedBg(c);
-        float bx=getWidth()*.10f,by=getHeight()*.105f,bw=getWidth()*.80f,bh=dp(120);
-        c.save();c.rotate(-2.5f,getWidth()/2f,by+bh/2);rr(c,bx+dp(7),by+dp(8),bw,bh,dp(22),C("#24243A"));rr(c,bx,by,bw,bh,dp(22),C("#F04444"));c.restore();
-        if(System.currentTimeMillis()<homeSecretUntil){c.save();float wig=(float)Math.sin(System.currentTimeMillis()/55.0)*dp(7);c.translate(wig,0);mangaTxt(c,"NO  RUL—HEY!",getWidth()/2f,getHeight()*.18f,38,Color.WHITE,Paint.Align.CENTER);c.restore();}else mangaTxt(c,"NO RULES",getWidth()/2f,getHeight()*.18f,44,Color.WHITE,Paint.Align.CENTER);
-        mangaTxt(c,"THINK WEIRD.",getWidth()/2f,getHeight()*.255f,19,C("#24243A"),Paint.Align.CENTER);
+        float bx=getWidth()*.09f,by=getHeight()*.095f,bw=getWidth()*.82f,bh=dp(126);
+        c.save();c.rotate(-2.5f,getWidth()/2f,by+bh/2);rr(c,bx+dp(9),by+dp(10),bw,bh,dp(24),C("#040716"));rr(c,bx,by,bw,bh,dp(24),C("#FF2EA6"));p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(dp(3));p.setColor(C("#39F7FF"));c.drawRoundRect(bx,by,bx+bw,by+bh,dp(24),dp(24),p);c.restore();
+        if(System.currentTimeMillis()<homeSecretUntil){c.save();float wig=(float)Math.sin(System.currentTimeMillis()/55.0)*dp(7);c.translate(wig,0);mangaTxt(c,"NO  RUL—HEY!",getWidth()/2f,getHeight()*.18f,39,Color.WHITE,Paint.Align.CENTER);c.restore();}else mangaTxt(c,"NO RULES",getWidth()/2f,getHeight()*.18f,45,Color.WHITE,Paint.Align.CENTER);
+        mangaTxt(c,"THINK WEIRD.",getWidth()/2f,getHeight()*.255f,20,C("#FFE94D"),Paint.Align.CENTER);
         chibi(c,getWidth()*.50f,getHeight()*.41f,1.4f,false,false);speech(c,"THE PHONE IS PART OF THE PUZZLE.",getWidth()*.12f,getHeight()*.52f,getWidth()*.76f,dp(105));
-        button(c,"PLAY",getWidth()*.18f,getHeight()*.70f,getWidth()*.64f,dp(66),C("#FFCA4B"));button(c,"LEVEL SELECT",getWidth()*.18f,getHeight()*.79f,getWidth()*.64f,dp(60),C("#73D8C2"));
+        button(c,"PLAY",getWidth()*.18f,getHeight()*.70f,getWidth()*.64f,dp(66),C("#FFE94D"));button(c,"LEVEL SELECT",getWidth()*.18f,getHeight()*.79f,getWidth()*.64f,dp(60),C("#39F7FF"));
     }
     private void button(Canvas c,String s,float x,float y,float w,float h,int col){
-        rr(c,x+dp(5),y+dp(6),w,h,dp(18),C("#24243A")); rr(c,x,y,w,h,dp(18),col);
-        p.setColor(Color.argb(70,255,255,255));p.setStyle(Paint.Style.FILL);c.drawRoundRect(x+dp(8),y+dp(7),x+w-dp(8),y+h*.43f,dp(12),dp(12),p);
-        p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(dp(3)); p.setColor(C("#24243A")); c.drawRoundRect(x,y,x+w,y+h,dp(18),dp(18),p);
-        mangaTxt(c,s,x+w/2,y+h*.64f,20,C("#24243A"),Paint.Align.CENTER);
+        rr(c,x+dp(6),y+dp(7),w,h,dp(18),C("#040716")); rr(c,x,y,w,h,dp(18),col);
+        p.setColor(Color.argb(85,255,255,255));p.setStyle(Paint.Style.FILL);c.drawRoundRect(x+dp(8),y+dp(7),x+w-dp(8),y+h*.40f,dp(12),dp(12),p);
+        p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(dp(3)); p.setColor(C("#11183B")); c.drawRoundRect(x,y,x+w,y+h,dp(18),dp(18),p);
+        mangaTxt(c,s,x+w/2,y+h*.64f,20,C("#10142B"),Paint.Align.CENTER);
     }
 
     private void drawLevelSelect(Canvas c){
-        c.drawColor(C("#FFF3D8")); mangaTxt(c,"LEVEL SELECT",getWidth()/2f,getHeight()*.07f,28,C("#24243A"),Paint.Align.CENTER);
+        speedBg(c); mangaTxt(c,"LEVEL SELECT",getWidth()/2f,getHeight()*.07f,28,Color.WHITE,Paint.Align.CENTER);
         int cols=5; float gap=dp(8); float cell=(getWidth()-dp(32)-gap*(cols-1))/cols; float top=getHeight()*.12f;
-        for(int i=1;i<=TOTAL_LEVELS;i++){ int row=(i-1)/cols,col=(i-1)%cols; float x=dp(16)+col*(cell+gap), y=top+row*(cell+gap); int color=prefs.getBoolean("level_"+i,false)?C("#7CD6C1"):Color.WHITE; rr(c,x,y,cell,cell,dp(14),color); p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(dp(2)); p.setColor(C("#24243A")); c.drawRoundRect(x,y,x+cell,y+cell,dp(14),dp(14),p); mangaTxt(c,String.valueOf(i),x+cell/2,y+cell*.60f,18,C("#24243A"),Paint.Align.CENTER); }
-        button(c,"BACK",getWidth()*.30f,getHeight()*.86f,getWidth()*.40f,dp(58),C("#FFCA4B"));
+        for(int i=1;i<=TOTAL_LEVELS;i++){ int row=(i-1)/cols,col=(i-1)%cols; float x=dp(16)+col*(cell+gap), y=top+row*(cell+gap); int color=prefs.getBoolean("level_"+i,false)?C("#39F7FF"):C("#11183B"); rr(c,x+dp(3),y+dp(4),cell,cell,dp(14),C("#040716")); rr(c,x,y,cell,cell,dp(14),color); p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(dp(2)); p.setColor(C("#FF2EA6")); c.drawRoundRect(x,y,x+cell,y+cell,dp(14),dp(14),p); mangaTxt(c,String.valueOf(i),x+cell/2,y+cell*.60f,18,prefs.getBoolean("level_"+i,false)?C("#10142B"):Color.WHITE,Paint.Align.CENTER); }
+        button(c,"BACK",getWidth()*.30f,getHeight()*.86f,getWidth()*.40f,dp(58),C("#FFE94D"));
     }
 
     private void drawFinish(Canvas c){
-        speedBg(c); mangaTxt(c,"TEST COMPLETE!",getWidth()/2f,getHeight()*.25f,40,C("#24243A"),Paint.Align.CENTER); mangaTxt(c,"YOU SURVIVED THIS BUILD",getWidth()/2f,getHeight()*.32f,23,C("#E94C67"),Paint.Align.CENTER); chibi(c,getWidth()*.50f,getHeight()*.49f,1.5f,false,false); wrap(c,"Now we test: which rooms are fun, confusing, too easy, or impossible?",getWidth()/2f,getHeight()*.64f,getWidth()*.78f,18,C("#55566D")); button(c,"LEVEL SELECT",getWidth()*.18f,getHeight()*.79f,getWidth()*.64f,dp(62),C("#7CD6C1"));
+        speedBg(c); mangaTxt(c,"TEST COMPLETE!",getWidth()/2f,getHeight()*.25f,40,Color.WHITE,Paint.Align.CENTER); mangaTxt(c,"YOU SURVIVED THIS BUILD",getWidth()/2f,getHeight()*.32f,23,C("#FFE94D"),Paint.Align.CENTER); chibi(c,getWidth()*.50f,getHeight()*.49f,1.5f,false,false); wrap(c,"Now we test: which rooms are fun, confusing, too easy, or impossible?",getWidth()/2f,getHeight()*.64f,getWidth()*.78f,18,C("#D7E8FF")); button(c,"LEVEL SELECT",getWidth()*.18f,getHeight()*.79f,getWidth()*.64f,dp(62),C("#39F7FF"));
     }
 
     private void drawLevel(Canvas c){
@@ -391,11 +395,11 @@ public class GameView extends View implements SensorEventListener {
 
     private void door(Canvas c,float x,float y,float w,float h){
         float l=x-w/2,t=y-h/2,r=x+w/2,b=y+h/2;
-        rr(c,l+dp(5),t+dp(7),w,h,dp(20),C("#24243A")); rr(c,l,t,w,h,dp(20),C("#9B5C35"));
-        p.setStyle(Paint.Style.FILL);p.setColor(C("#C87B45"));c.drawRoundRect(l+dp(9),t+dp(9),r-dp(9),b-dp(9),dp(14),dp(14),p);
-        p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(dp(3));p.setColor(C("#714023"));c.drawLine(l+w*.34f,t+dp(12),l+w*.34f,b-dp(12),p);c.drawLine(l+w*.67f,t+dp(12),l+w*.67f,b-dp(12),p);
-        p.setStyle(Paint.Style.FILL);p.setColor(C("#F5B93F"));c.drawCircle(x+w*.28f,y,dp(9),p);p.setColor(C("#24243A"));c.drawCircle(x+w*.28f,y,dp(3),p);c.drawRect(x+w*.28f-dp(2),y,x+w*.28f+dp(2),y+dp(9),p);
-        p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(dp(4));p.setColor(C("#24243A"));c.drawRoundRect(l,t,r,b,dp(20),dp(20),p);
+        rr(c,l+dp(6),t+dp(8),w,h,dp(20),C("#040716")); rr(c,l,t,w,h,dp(20),C("#261E69"));
+        p.setStyle(Paint.Style.FILL);p.setColor(C("#11183B"));c.drawRoundRect(l+dp(9),t+dp(9),r-dp(9),b-dp(9),dp(14),dp(14),p);
+        p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(dp(3));p.setColor(C("#39F7FF"));c.drawLine(l+w*.34f,t+dp(12),l+w*.34f,b-dp(12),p);c.drawLine(l+w*.67f,t+dp(12),l+w*.67f,b-dp(12),p);
+        p.setStyle(Paint.Style.FILL);p.setColor(C("#FFE94D"));c.drawCircle(x+w*.28f,y,dp(10),p);p.setColor(C("#11183B"));c.drawCircle(x+w*.28f,y,dp(4),p);p.setColor(C("#39F7FF"));c.drawRect(x+w*.28f-dp(2),y,x+w*.28f+dp(2),y+dp(10),p);
+        p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(dp(4));p.setColor(C("#FF2EA6"));c.drawRoundRect(l,t,r,b,dp(20),dp(20),p);
     }
 
     private void l1(Canvas c){ header(c,"That key is ridiculously dramatic."); door(c,getWidth()*.5f,getHeight()*.42f,getWidth()*.30f,getHeight()*.28f); c.save(); c.translate(keyX,keyY); c.scale(keyScale,keyScale); drawCompleteKey(c,0,0,.82f); c.restore(); instruction(c,"Pinch smaller, then drag the key into the door."); if(keyScale<.48f&&Math.hypot(keyX-getWidth()*.5f,keyY-getHeight()*.42f)<dp(55)) solved(); }
@@ -533,8 +537,26 @@ public class GameView extends View implements SensorEventListener {
 
 
     private void keyPiece(Canvas c,float x,float y,int idx){drawKeyFragment(c,x,y,idx,1f,false);}    
-    private void drawKeyFragment(Canvas c,float x,float y,int idx,float sc,boolean ghost){int gold=ghost?C("#E8D9AF"):C("#F5B93F"),edge=ghost?C("#B9AA83"):C("#724C08");p.setStrokeCap(Paint.Cap.ROUND);p.setStrokeJoin(Paint.Join.ROUND);if(idx==0){p.setStyle(Paint.Style.STROKE);p.setColor(edge);p.setStrokeWidth(dp(14)*sc);c.drawCircle(x-dp(8)*sc,y,dp(19)*sc,p);p.setColor(gold);p.setStrokeWidth(dp(9)*sc);c.drawCircle(x-dp(8)*sc,y,dp(19)*sc,p);p.setStyle(Paint.Style.FILL);p.setColor(gold);c.drawRoundRect(x+dp(7)*sc,y-dp(7)*sc,x+dp(31)*sc,y+dp(7)*sc,dp(4)*sc,dp(4)*sc,p);}else if(idx==1){p.setStyle(Paint.Style.FILL);p.setColor(edge);c.drawRoundRect(x-dp(32)*sc,y-dp(11)*sc,x+dp(32)*sc,y+dp(11)*sc,dp(6)*sc,dp(6)*sc,p);p.setColor(gold);c.drawRoundRect(x-dp(29)*sc,y-dp(7)*sc,x+dp(29)*sc,y+dp(7)*sc,dp(5)*sc,dp(5)*sc,p);}else{Path q=new Path();q.moveTo(x-dp(31)*sc,y-dp(10)*sc);q.lineTo(x+dp(13)*sc,y-dp(10)*sc);q.lineTo(x+dp(13)*sc,y-dp(1)*sc);q.lineTo(x+dp(29)*sc,y-dp(1)*sc);q.lineTo(x+dp(29)*sc,y+dp(19)*sc);q.lineTo(x+dp(13)*sc,y+dp(19)*sc);q.lineTo(x+dp(13)*sc,y+dp(9)*sc);q.lineTo(x+dp(2)*sc,y+dp(9)*sc);q.lineTo(x+dp(2)*sc,y+dp(16)*sc);q.lineTo(x-dp(12)*sc,y+dp(16)*sc);q.lineTo(x-dp(12)*sc,y+dp(9)*sc);q.lineTo(x-dp(31)*sc,y+dp(9)*sc);q.close();p.setStyle(Paint.Style.FILL);p.setColor(edge);c.drawPath(q,p);c.save();c.scale(.94f,.86f,x,y);p.setColor(gold);c.drawPath(q,p);c.restore();}p.setStrokeCap(Paint.Cap.BUTT);p.setStrokeJoin(Paint.Join.MITER);}
-    private void drawCompleteKey(Canvas c,float x,float y,float sc){drawKeyFragment(c,x-dp(49)*sc,y,0,sc,false);drawKeyFragment(c,x,y,1,sc,false);drawKeyFragment(c,x+dp(51)*sc,y,2,sc,false);if(System.currentTimeMillis()%1500<450){p.setStyle(Paint.Style.FILL);p.setColor(Color.argb(150,255,255,255));c.drawCircle(x-dp(64)*sc,y-dp(20)*sc,dp(4)*sc,p);}}
+    private void drawKeyFragment(Canvas c,float x,float y,int idx,float sc,boolean ghost){
+        int fill=ghost?C("#3A446D"):C("#FFE94D"), edge=ghost?C("#6670A1"):C("#11183B"), glow=ghost?C("#5663A4"):C("#39F7FF");
+        p.setStrokeCap(Paint.Cap.ROUND);p.setStrokeJoin(Paint.Join.ROUND);
+        if(idx==0){
+            p.setStyle(Paint.Style.STROKE);p.setColor(edge);p.setStrokeWidth(dp(15)*sc);c.drawCircle(x-dp(9)*sc,y,dp(20)*sc,p);
+            p.setColor(fill);p.setStrokeWidth(dp(10)*sc);c.drawCircle(x-dp(9)*sc,y,dp(20)*sc,p);
+            p.setStyle(Paint.Style.FILL);p.setColor(fill);c.drawRoundRect(x+dp(5)*sc,y-dp(8)*sc,x+dp(35)*sc,y+dp(8)*sc,dp(5)*sc,dp(5)*sc,p);
+            p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(dp(3)*sc);p.setColor(glow);c.drawLine(x+dp(10)*sc,y-dp(4)*sc,x+dp(30)*sc,y-dp(4)*sc,p);
+        }else if(idx==1){
+            p.setStyle(Paint.Style.FILL);p.setColor(edge);c.drawRoundRect(x-dp(36)*sc,y-dp(12)*sc,x+dp(36)*sc,y+dp(12)*sc,dp(7)*sc,dp(7)*sc,p);
+            p.setColor(fill);c.drawRoundRect(x-dp(32)*sc,y-dp(8)*sc,x+dp(32)*sc,y+dp(8)*sc,dp(6)*sc,dp(6)*sc,p);
+            p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(dp(3)*sc);p.setColor(glow);c.drawLine(x-dp(22)*sc,y,x+dp(20)*sc,y,p);
+        }else{
+            Path q=new Path();q.moveTo(x-dp(34)*sc,y-dp(11)*sc);q.lineTo(x+dp(14)*sc,y-dp(11)*sc);q.lineTo(x+dp(14)*sc,y-dp(2)*sc);q.lineTo(x+dp(31)*sc,y-dp(2)*sc);q.lineTo(x+dp(31)*sc,y+dp(18)*sc);q.lineTo(x+dp(14)*sc,y+dp(18)*sc);q.lineTo(x+dp(14)*sc,y+dp(8)*sc);q.lineTo(x+dp(2)*sc,y+dp(8)*sc);q.lineTo(x+dp(2)*sc,y+dp(15)*sc);q.lineTo(x-dp(14)*sc,y+dp(15)*sc);q.lineTo(x-dp(14)*sc,y+dp(8)*sc);q.lineTo(x-dp(34)*sc,y+dp(8)*sc);q.close();
+            p.setStyle(Paint.Style.FILL);p.setColor(edge);c.drawPath(q,p);c.save();c.scale(.95f,.88f,x,y);p.setColor(fill);c.drawPath(q,p);c.restore();
+            p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(dp(3)*sc);p.setColor(glow);c.drawLine(x-dp(20)*sc,y-dp(4)*sc,x+dp(20)*sc,y-dp(4)*sc,p);
+        }
+        p.setStrokeCap(Paint.Cap.BUTT);p.setStrokeJoin(Paint.Join.MITER);
+    }
+    private void drawCompleteKey(Canvas c,float x,float y,float sc){drawKeyFragment(c,x-dp(54)*sc,y,0,sc,false);drawKeyFragment(c,x,y,1,sc,false);drawKeyFragment(c,x+dp(55)*sc,y,2,sc,false);if(System.currentTimeMillis()%1500<450){p.setStyle(Paint.Style.FILL);p.setColor(Color.argb(170,57,247,255));c.drawCircle(x-dp(68)*sc,y-dp(22)*sc,dp(5)*sc,p);}}
     private void keyProgress(Canvas c,int mask,int total){float y=getHeight()*.75f;float[] xs={.34f,.50f,.66f};for(int i=0;i<Math.min(3,total);i++){drawKeyFragment(c,getWidth()*xs[i],y,i,.82f,true);if((mask&(1<<i))!=0)drawKeyFragment(c,getWidth()*xs[i],y,i,.82f,false);}if((mask&7)==7&&total==3)drawCompleteKey(c,getWidth()*.50f,y,.82f);mangaTxt(c,"KEY PIECES  "+Integer.bitCount(mask)+" / "+total,getWidth()/2f,getHeight()*.84f,19,C("#E94C67"),Paint.Align.CENTER);}
     private void l28(Canvas c){header(c,"Three key pieces are hiding in plain sight.");float dt=getHeight()*.44f;rr(c,getWidth()*.08f,dt,getWidth()*.84f,dp(26),dp(10),C("#A96F45"));rr(c,getWidth()*.12f,dt+dp(28),getWidth()*.30f,dp(100),dp(12),C("#D49A68"));mangaTxt(c,deskDrawerOpen?"OPEN":"DRAWER",getWidth()*.27f,dt+dp(88),18,C("#24243A"),Paint.Align.CENTER);if(deskDrawerOpen&&(deskMask&1)==0)keyPiece(c,getWidth()*.27f,dt+dp(60),0);p.setStyle(Paint.Style.FILL);p.setColor(C("#7CD6C1"));c.drawCircle(deskMugX,deskMugY,dp(34),p);mangaTxt(c,"MUG",deskMugX,deskMugY+sp(6),14,C("#24243A"),Paint.Align.CENTER);if(Math.abs(deskMugX-getWidth()*.63f)>dp(80)&&(deskMask&2)==0)keyPiece(c,getWidth()*.63f,getHeight()*.59f,1);rr(c,getWidth()*.66f,getHeight()*.42f,getWidth()*.22f,dp(72),dp(8),C("#E94C67"));mangaTxt(c,"BOOK",getWidth()*.77f,getHeight()*.46f,17,Color.WHITE,Paint.Align.CENTER);if(deskBookHold>0&&System.currentTimeMillis()-deskBookHold>1100&&(deskMask&4)==0)keyPiece(c,getWidth()*.77f,getHeight()*.50f,2);if(deskMask==7){drawCompleteKey(c,getWidth()*.50f,getHeight()*.68f,.82f);door(c,getWidth()*.82f,getHeight()*.66f,getWidth()*.18f,getHeight()*.19f);}keyProgress(c,deskMask,3);}
     private void l29(Canvas c){header(c,"The toy box has terrible secrets.");rr(c,getWidth()*.08f,getHeight()*.36f,getWidth()*.84f,getHeight()*.34f,dp(24),C("#C88EE8"));mangaTxt(c,"🧸",getWidth()*.28f,getHeight()*.51f,50,C("#24243A"),Paint.Align.CENTER);if(toyBearTaps>=2&&(toyMask&1)==0)keyPiece(c,getWidth()*.28f,getHeight()*.58f,0);p.setStyle(Paint.Style.FILL);p.setColor(C("#FF7A89"));c.drawCircle(toyBallX,toyBallY,dp(38),p);if(Math.abs(toyBallX-getWidth()*.70f)>dp(100)&&(toyMask&2)==0)keyPiece(c,getWidth()*.70f,getHeight()*.60f,1);mangaTxt(c,"🤖",getWidth()*.50f,getHeight()*.61f,48,C("#24243A"),Paint.Align.CENTER);if(shakeCount-toyShakeStart>=2&&(toyMask&4)==0)keyPiece(c,getWidth()*.50f,getHeight()*.67f,2);if(toyMask==7){door(c,getWidth()*.82f,getHeight()*.66f,getWidth()*.18f,getHeight()*.19f);drawCompleteKey(c,getWidth()*.58f,getHeight()*.72f,.80f);}keyProgress(c,toyMask,3);}
