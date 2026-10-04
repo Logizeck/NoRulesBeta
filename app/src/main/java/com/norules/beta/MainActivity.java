@@ -5,6 +5,8 @@ import android.app.Activity;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.graphics.Matrix;
 import android.media.MediaPlayer;
 import android.os.Build;
 import android.os.Bundle;
@@ -81,10 +83,7 @@ public class MainActivity extends Activity {
     }
 
     private void launchSelfieCamera() {
-        Intent intent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
-        intent.putExtra("android.intent.extras.CAMERA_FACING", 1);
-        intent.putExtra("android.intent.extra.USE_FRONT_CAMERA", true);
-        try { startActivityForResult(intent, REQ_SELFIE); }
+        try { startActivityForResult(new Intent(this, CameraCaptureActivity.class), REQ_SELFIE); }
         catch (Exception e) { if (gameView != null) gameView.onSelfieCancelled(); }
     }
 
@@ -101,11 +100,17 @@ public class MainActivity extends Activity {
     @Override protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode != REQ_SELFIE) return;
-        if (resultCode == RESULT_OK && data != null && data.getExtras() != null) {
-            Object value = data.getExtras().get("data");
-            if (value instanceof Bitmap && gameView != null) {
-                gameView.onSelfieCaptured((Bitmap)value);
-                return;
+        if (resultCode == RESULT_OK && data != null) {
+            String path=data.getStringExtra("photo_path");
+            if(path!=null){
+                try{
+                    Bitmap raw=BitmapFactory.decodeFile(path);
+                    if(raw!=null){
+                        Bitmap out=raw;
+                        if(raw.getWidth()>raw.getHeight()){Matrix m=new Matrix();m.postRotate(-90);m.postScale(-1,1,raw.getWidth()/2f,raw.getHeight()/2f);out=Bitmap.createBitmap(raw,0,0,raw.getWidth(),raw.getHeight(),m,true);}
+                        if(gameView!=null){gameView.onSelfieCaptured(out);return;}
+                    }
+                }catch(Exception ignored){}
             }
         }
         if (gameView != null) gameView.onSelfieCancelled();

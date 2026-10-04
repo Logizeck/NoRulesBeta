@@ -1,31 +1,16 @@
-# B0.4 test plan
+# B0.5 focused test plan
 
-## Priority regression
-1. Launch after clearing app data: language selection appears before gameplay.
-2. Choosing a language is persisted after restart.
-3. Camera permission appears immediately after language choice, not when first entering level 27.
-4. Snowman fail speech uses the selected language.
-5. Text on menu/header/hint/ad panels remains readable against its background.
-6. Fake ad: trigger after 5 completed levels OR after 3 minutes; close only after 3 seconds; timer and completed-level counter reset after the ad.
+Prioritize these checks before reviewing the rest of the campaign.
 
-## New content 36–50
-36 Neon Switches — tap 2,1,3.
-37 Safe Dial — drag the dial to the cyan notch.
-38 Magnet Heist — drag magnet close to metal puck and pull puck to the target.
-39 Rotate the Path — rotate all tiles horizontal.
-40 Flashlight — drag light to reveal the hidden star, then tap it.
-41 Balance It — build equal totals on both sides.
-42 Color Order — replay the displayed color order.
-43 Mirror Panel — solve the mirrored arrow order.
-44 Broken Circuit — activate all three nodes.
-45 Secret Code — read shape counts and enter 153.
-46 Peel the Poster — perform repeated swipes until all layers are removed.
-47 Memory Grid — memorize highlighted squares and replay.
-48 Two-Hand Lock — hold both pads simultaneously for 1.5 s.
-49 Shadow Doors — select the door whose shadow matches the frame.
-50 Chaos Core — open latch, pull lever, tap core 3 times.
-
-## Level select
-- Pages contain 12 slots each.
-- Pages 1–4 contain levels 1–48.
-- Page 5 contains levels 49–50 and future empty slots.
+1. Level 20: solution must require counting plus applying the three displayed operators; correct code is 481.
+2. Level 23: tap-and-release HOLD must NOT leave the gate open. The gate is open only while a finger remains on HOLD.
+3. Level 27: camera must stay inside the NO RULES experience; verify live preview, oval/eye/nose guide, alignment feedback, shutter, captured image orientation and accessory alignment on several face positions/distances.
+4. Level 28: verify 7/2/9 exist underneath the drawer/mug/notebook from the beginning and are progressively uncovered by dragging, not spawned afterward. Check keypad does not overlap the desk.
+5. Level 29: tilt maze should have controllable acceleration, collisions and a reachable center on the test device.
+6. Level 30: verify piñata visibly swings when the phone is tilted/rotated; taps count only when hitting the moving piñata; completion at 8 hits.
+7. Level 31: foreground layer must follow drag smoothly and solve only when visually aligned.
+8. Level 32: every piston must move continuously under the finger, snap near its own colored notch, and not respond as a tap-toggle.
+9. Level 33: solve by increasing number of interior angles. Shapes are intentionally shuffled.
+10. Level 35: test physical slide, progressive cracks, pull release and manual assembly. No tilt should be required.
+11. Level 37: rotate each of four modules; lamp must remain off until all modules create the complete battery-to-lamp circuit, then visibly glow.
+12. Snowman: both eyes required before butt-carrot gag; warning -> scream -> eyes fly out -> single realistic puddle -> fail. First session meltdown should trigger the simulated ad once.

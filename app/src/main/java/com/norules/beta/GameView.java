@@ -8,6 +8,7 @@ import android.media.AudioManager;
 import android.media.AudioAttributes;
 import android.media.ToneGenerator;
 import android.media.FaceDetector;
+import android.media.MediaPlayer;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.*;
@@ -17,6 +18,7 @@ public class GameView extends View implements SensorEventListener {
     private final Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final SensorManager sm;
     private final Sensor accel;
+    private final Sensor gyro;
     private final AudioManager audio;
     private final SharedPreferences prefs;
     private final float density, scaledDensity;
@@ -41,6 +43,7 @@ public class GameView extends View implements SensorEventListener {
 
     // sensors
     private float ax, ay, az;
+    private float gx, gy, gz;
     private float lastAx, lastAy, lastAz;
     private long lastFrame = System.nanoTime();
     private float stillScore = 0;
@@ -106,8 +109,13 @@ public class GameView extends View implements SensorEventListener {
     private int snowDrag = 0; // 1 carrot, 2/3 stones
     private boolean snowEye1, snowEye2, snowNose, snowSmile, drawingSmile;
     private final ArrayList<PointF> snowSmilePoints = new ArrayList<>();
-    private int snowEasterPhase = 0; // 0 normal, 1 warning/blush, 2 melting
+    private int snowEasterPhase = 0; // 0 normal, 1 warning, 2 eyes-pop, 3 melt, 4 fail
     private long snowEasterAt = 0;
+    private float snowEye1VX=0, snowEye1VY=0, snowEye2VX=0, snowEye2VY=0;
+    private boolean snowScreamPlayed=false;
+    private MediaPlayer snowScreamPlayer;
+    private boolean snowMeltdownAdShown=false;
+    private boolean returnToSnowFailAfterAd=false;
     // L22
     private int oppositeChoice = -1;
     // L23
@@ -145,19 +153,21 @@ public class GameView extends View implements SensorEventListener {
     private int balloonSecretTaps=0; private long balloonSecretUntil=0;
     private long ninjaSecretUntil=0;
 
-    // L28-L35
-    private int deskMask=0; private float deskMugX,deskMugY; private boolean deskMugDrag=false; private long deskBookHold=0; private boolean deskDrawerOpen=false;
-    private int toyMask=0; private float toyBallX,toyBallY; private boolean toyBallDrag=false; private int toyBearTaps=0; private int toyShakeStart=0;
-    private int kitchenMask=0; private float appleX,appleY; private boolean appleDrag=false; private int toasterTaps=0; private float jarTwist=0,lastMoveX=0;
-    private int vaultMask=0; private int vaultShakeStart=0; private long vaultHoldStart=0; private long vaultTiltStart=0;
+    // L28-L35 reworked interaction state
+    private float deskMugX,deskMugY,deskBookX,deskBookY,deskDrawerX; private int deskDrag=0; private String deskCode="";
+    private float mazeBallX,mazeBallY,mazeVX,mazeVY;
+    private float pinataAngle=0,pinataAV=0; private int pinataHits=0; private long pinataFlashUntil=0;
+    private float perspectiveX,perspectiveY; private boolean perspectiveDrag=false;
+    private final float[] pinY={0,0,0,0}; private int pinDrag=-1;
     private final int[] soundSeq={0,2,1,0}; private final ArrayList<Integer> soundTaps=new ArrayList<>(); private boolean soundPlaying=false,soundReady=false;
-    private final int[] logicTarget={0,2,3,1}; private int logicPos=0;
+    private final int[] logicTarget={1,3,0,2}; private int logicPos=0;
     private float rubProgress=0; private boolean rubbing=false; private String revealCode="";
     private int forgeMask=0; private int forgeShakeStart=0; private int forgeGemTaps=0; private float forgePanelX; private boolean forgePanelDrag=false; private long forgeTwoFingerStart=0; private float forgeKeyX,forgeKeyY; private boolean forgeKeyDrag=false;
 
     // L36-L50 new puzzle state
     private int neonSwitchStep=0;
     private float dialAngle=0,lastDialAngle=0; private boolean dialDrag=false;
+    private final int[] circuitRot={0,0,0,0}; private final int[] circuitTarget={1,0,1,0};
     private float magnetX,magnetY,metalX,metalY; private boolean magnetDrag=false;
     private final int[] tileRot={0,0,0,0};
     private float flashlightX,flashlightY; private boolean flashlightDrag=false; private boolean hiddenMarkFound=false;
@@ -183,9 +193,9 @@ public class GameView extends View implements SensorEventListener {
             "PEEL IT", "SAMURAI SLASH", "SHHH!", "STATUE MODE", "LEFT / RIGHT",
             "BIG DOOR", "MOVE THE BUBBLE", "COLOR FUSION", "MEMORY FACES", "COUNT IT",
             "SNOWMAN FACE", "WRONG DOOR", "TILT + HOLD", "SCREENSHOT!", "BOSS ROOM",
-            "KEY ASSEMBLY", "SELFIE TROUBLE", "MESSY DESK", "TOY BOX", "KITCHEN CHAOS", "SENSOR VAULT",
-            "LOCK PINS", "ODD LOGIC", "RUB IT OUT", "MASTER KEY ROOM",
-            "NEON SWITCHES", "SAFE DIAL", "MAGNET HEIST", "ROTATE THE PATH", "FLASHLIGHT",
+            "KEY ASSEMBLY", "SELFIE TROUBLE", "MESSY DESK", "TILT MAZE", "PIÑATA PANIC", "PERSPECTIVE TRICK",
+            "COLOR PISTONS", "ANGLE ORDER", "RUB IT OUT", "MASTER KEY ROOM",
+            "NEON SWITCHES", "CIRCUIT LIGHT", "MAGNET HEIST", "ROTATE THE PATH", "FLASHLIGHT",
             "BALANCE IT", "COLOR ORDER", "MIRROR PANEL", "BROKEN CIRCUIT", "SECRET CODE",
             "PEEL THE POSTER", "MEMORY GRID", "TWO-HAND LOCK", "SHADOW DOORS", "CHAOS CORE"
     };
@@ -211,7 +221,7 @@ public class GameView extends View implements SensorEventListener {
             "Speech bubbles can block more than dialogue.",
             "Blue + yellow has a useful result.",
             "Watch first. Tap later.",
-            "Count cats, stars, then swords.",
+            "Count first, then apply the tiny operation printed next to each row.",
             "Build his face: two stone eyes, carrot nose, then draw a curved smile with your finger.",
             "He always chooses the wrong door. Do the opposite of his choice.",
             "One hand opens the gate. The other controls gravity.",
@@ -222,9 +232,9 @@ public class GameView extends View implements SensorEventListener {
             "Move the objects to reveal three key pieces. Then drag every piece into its matching assembly slot.",
             "The pieces are under the toys. Move or provoke the toys, then drag the revealed pieces into the key outline.",
             "Each breakfast object hides a real piece. Reveal it, then physically drag it into the matching key slot.",
-            "Each compartment wants a different phone action: shake, hold, and tilt.",
-            "Each pin has a visible target notch. Tap the pin until its head lines up with the mark.",
-            "Odd shapes low-to-high first. Then even shapes high-to-low.",
+            "The two shapes belong together. Move the foreground piece until the perspective makes one clean symbol.",
+            "Each colored piston moves directly under your finger. Drag every piston to its matching notch.",
+            "Order the shapes by how many interior angles they have, from fewest to most.",
             "Rub the grime away until the hidden code is readable, then enter it.",
             "Slide the panel, crack the box, and pull the cyan tab down. Drag all three revealed pieces into the key outline, then use that same rebuilt key.",
             "The three switches flash in a sequence. Copy that exact order.",
@@ -250,20 +260,24 @@ public class GameView extends View implements SensorEventListener {
         scaledDensity = getResources().getDisplayMetrics().scaledDensity;
         sm = (SensorManager)c.getSystemService(Context.SENSOR_SERVICE);
         accel = sm.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+        gyro = sm.getDefaultSensor(Sensor.TYPE_GYROSCOPE);
         audio = (AudioManager)c.getSystemService(Context.AUDIO_SERVICE);
         prefs = c.getSharedPreferences("no_rules_beta", Context.MODE_PRIVATE);
         hints = prefs.getInt("hints", 3);
         languageCode = prefs.getString("language", "");
         screen = languageCode.isEmpty() ? -1 : 0;
         snowmanArt = BitmapFactory.decodeResource(getResources(), getResources().getIdentifier("snowman_3d", "drawable", c.getPackageName()));
+        int screamId=getResources().getIdentifier("snow_scream","raw",c.getPackageName());
+        if(screamId!=0){try{snowScreamPlayer=MediaPlayer.create(c,screamId);}catch(Exception ignored){snowScreamPlayer=null;}}
         setKeepScreenOn(true);
         setBackgroundColor(C("#F7E8C6"));
     }
 
-    public void onResumeGame(){ if(accel!=null) sm.registerListener(this, accel, SensorManager.SENSOR_DELAY_GAME); lastFrame=System.nanoTime(); invalidate(); }
+    public void onResumeGame(){ if(accel!=null) sm.registerListener(this, accel, SensorManager.SENSOR_DELAY_GAME); if(gyro!=null) sm.registerListener(this, gyro, SensorManager.SENSOR_DELAY_GAME); lastFrame=System.nanoTime(); invalidate(); }
     public void onPauseGame(){ sm.unregisterListener(this); }
 
     @Override public void onSensorChanged(SensorEvent e){
+        if(e.sensor.getType()==Sensor.TYPE_GYROSCOPE){gx=e.values[0];gy=e.values[1];gz=e.values[2];return;}
         if(e.sensor.getType()!=Sensor.TYPE_ACCELEROMETER) return;
         lastAx=ax; lastAy=ay; lastAz=az;
         ax=-e.values[0]; ay=e.values[1]; az=e.values[2];
@@ -458,19 +472,21 @@ public class GameView extends View implements SensorEventListener {
         blueX=getWidth()*.30f; blueY=getHeight()*.62f; yellowX=getWidth()*.70f; yellowY=getHeight()*.62f; orbDrag=0; greenMade=false;
         memoryPhase=0; memoryPos=0; memoryShownAt=System.currentTimeMillis(); code="";
         carrotX=getWidth()*.20f; carrotY=getHeight()*.77f; stone1X=getWidth()*.43f; stone1Y=getHeight()*.80f; stone2X=getWidth()*.58f; stone2Y=getHeight()*.80f;
-        snowDrag=0; snowEye1=false; snowEye2=false; snowNose=false; snowSmile=false; drawingSmile=false; snowSmilePoints.clear(); snowEasterPhase=0; snowEasterAt=0;
+        snowDrag=0; snowEye1=false; snowEye2=false; snowNose=false; snowSmile=false; drawingSmile=false; snowSmilePoints.clear(); snowEasterPhase=0; snowEasterAt=0; snowEye1VX=snowEye1VY=snowEye2VX=snowEye2VY=0; snowScreamPlayed=false;
         assembleMask=0; assembleDrag=0; assembleX[0]=getWidth()*.20f; assembleY[0]=getHeight()*.68f; assembleX[1]=getWidth()*.48f; assembleY[1]=getHeight()*.76f; assembleX[2]=getWidth()*.77f; assembleY[2]=getHeight()*.68f; for(int i=0;i<4;i++)pinPos[i]=0;
         oppositeChoice=-1; gatePressed=false; screenshotCaptured=false;
         bossPhase=0; bossSealRevealed=false; bossBothStart=0;
         rhythmPlaying=false; rhythmReady=false; rhythmTaps.clear(); selfieBitmap=null; selfieCapturedAt=0; selfieRequested=false;
-        deskMask=0; deskMugX=getWidth()*.63f; deskMugY=getHeight()*.55f; deskMugDrag=false; deskBookHold=0; deskDrawerOpen=false;
-        toyMask=0; toyBallX=getWidth()*.70f; toyBallY=getHeight()*.60f; toyBallDrag=false; toyBearTaps=0; toyShakeStart=shakeCount;
-        kitchenMask=0; appleX=getWidth()*.30f; appleY=getHeight()*.61f; appleDrag=false; toasterTaps=0; jarTwist=0; lastMoveX=0;
-        vaultMask=0; vaultShakeStart=shakeCount; vaultHoldStart=0; vaultTiltStart=0;
+        deskMugX=getWidth()*.62f; deskMugY=getHeight()*.49f; deskBookX=getWidth()*.76f; deskBookY=getHeight()*.39f; deskDrawerX=getWidth()*.14f; deskDrag=0; deskCode="";
+        mazeBallX=getWidth()*.16f; mazeBallY=getHeight()*.68f; mazeVX=mazeVY=0;
+        pinataAngle=0;pinataAV=0;pinataHits=0;pinataFlashUntil=0;
+        perspectiveX=getWidth()*.72f;perspectiveY=getHeight()*.62f;perspectiveDrag=false;
+        pinDrag=-1; for(int i=0;i<4;i++)pinY[i]=getHeight()*.65f;
+        lastMoveX=0;
         soundTaps.clear(); soundPlaying=false; soundReady=false; logicPos=0; rubProgress=0; rubbing=false; revealCode="";
         forgeMask=0; forgeShakeStart=shakeCount; forgeGemTaps=0; forgePanelX=getWidth()*.56f; forgePanelDrag=false; forgeTwoFingerStart=0; forgeKeyX=getWidth()*.5f; forgeKeyY=getHeight()*.70f; forgeKeyDrag=false; forgePullY=getHeight()*.43f; forgePullDrag=false;
         foundPlacedMask=0;foundDrag=0;finalKeyDrag=false;finalKeyX=getWidth()*.50f;finalKeyY=keySlotY();for(int i=0;i<3;i++){foundPieceX[i]=getWidth()*.5f;foundPieceY[i]=getHeight()*.5f;}
-        neonSwitchStep=0;dialAngle=0;dialDrag=false;magnetX=getWidth()*.25f;magnetY=getHeight()*.65f;metalX=getWidth()*.72f;metalY=getHeight()*.48f;magnetDrag=false;for(int i=0;i<4;i++)tileRot[i]=i%3;flashlightX=getWidth()*.28f;flashlightY=getHeight()*.65f;flashlightDrag=false;hiddenMarkFound=false;balanceLeft=0;balanceRight=0;colorSeqPos=0;mirrorStep=0;wireMask=0;safeCode="";peelLayers=0;gridMemPos=0;gridShownAt=System.currentTimeMillis();gridReady=false;dualHoldStart=0;shadowChoice=-1;finalStage=0;finalTapCount=0;finalLeverY=getHeight()*.44f;finalLeverDrag=false;
+        neonSwitchStep=0;dialAngle=0;dialDrag=false;for(int i=0;i<4;i++)circuitRot[i]=(i+1)%2;magnetX=getWidth()*.25f;magnetY=getHeight()*.65f;metalX=getWidth()*.72f;metalY=getHeight()*.48f;magnetDrag=false;for(int i=0;i<4;i++)tileRot[i]=i%3;flashlightX=getWidth()*.28f;flashlightY=getHeight()*.65f;flashlightDrag=false;hiddenMarkFound=false;balanceLeft=0;balanceRight=0;colorSeqPos=0;mirrorStep=0;wireMask=0;safeCode="";peelLayers=0;gridMemPos=0;gridShownAt=System.currentTimeMillis();gridReady=false;dualHoldStart=0;shadowChoice=-1;finalStage=0;finalTapCount=0;finalLeverY=getHeight()*.44f;finalLeverDrag=false;
     }
     private void resetBall(){ ballX=getWidth()*.18f; ballY=getHeight()*.70f; vx=vy=0; lastFrame=System.nanoTime(); }
 
@@ -632,33 +648,102 @@ public class GameView extends View implements SensorEventListener {
 
     private void l19(Canvas c){ header(c,"Watch the faces. Then repeat them."); long now=System.currentTimeMillis(); if(memoryPhase==0&&now-memoryShownAt>2400)memoryPhase=1; float[] xs={.18f,.39f,.61f,.82f}; for(int i=0;i<4;i++){float x=getWidth()*xs[i],y=getHeight()*.55f;int col=C("#F7C7A7");p.setColor(col);p.setStyle(Paint.Style.FILL);c.drawCircle(x,y,dp(34),p);mangaTxt(c,new String[]{"😠","😴","😎","😱"}[i],x,y+sp(12),28,C("#EAF0FF"),Paint.Align.CENTER);} if(memoryPhase==0){ mangaTxt(c,""+(memorySeq[0]+1)+"  "+(memorySeq[1]+1)+"  "+(memorySeq[2]+1)+"  "+(memorySeq[3]+1),getWidth()/2f,getHeight()*.72f,28,C("#FF5BAA"),Paint.Align.CENTER);}else mangaTxt(c,"YOUR TURN  "+memoryPos+"/4",getWidth()/2f,getHeight()*.72f,22,C("#FF5BAA"),Paint.Align.CENTER); }
 
-    private void l20(Canvas c){ header(c,"Cats, stars, swords. In that order."); mangaTxt(c,"🐱 🐱 🐱",getWidth()/2f,getHeight()*.30f,28,C("#EAF0FF"),Paint.Align.CENTER);mangaTxt(c,"★ ★ ★ ★",getWidth()/2f,getHeight()*.38f,28,C("#FFB300"),Paint.Align.CENTER);mangaTxt(c,"⚔ ⚔",getWidth()/2f,getHeight()*.46f,28,C("#EAF0FF"),Paint.Align.CENTER); drawKeypad(c);mangaTxt(c,code.isEmpty()?"_ _ _":code,getWidth()/2f,getHeight()*.56f,28,C("#FF5BAA"),Paint.Align.CENTER);if(code.equals("342"))solved();if(code.length()>=3&&!code.equals("342")){showToast("NOPE");code="";}}
-    private void drawKeypad(Canvas c){float top=getHeight()*.62f;int n=1;for(int r=0;r<3;r++)for(int col=0;col<3;col++){float x=getWidth()*.22f+col*getWidth()*.28f,y=top+r*dp(62);rr(c,x-dp(28),y-dp(24),dp(56),dp(48),dp(12),Color.WHITE);mangaTxt(c,String.valueOf(n++),x,y+sp(7),18,C("#EAF0FF"),Paint.Align.CENTER);}}
+    private void l20(Canvas c){
+        header(c,"Count them, then decode them.");
+        float W=getWidth(),H=getHeight();
+        mangaTxt(c,"🐱  🐱  🐱",W*.42f,H*.33f,28,C("#EAF0FF"),Paint.Align.CENTER);mangaTxt(c,"+ 1",W*.77f,H*.33f,21,C("#39F7FF"),Paint.Align.CENTER);
+        mangaTxt(c,"★  ★  ★  ★",W*.42f,H*.40f,28,C("#FFE94D"),Paint.Align.CENTER);mangaTxt(c,"× 2",W*.77f,H*.40f,21,C("#FF5BAA"),Paint.Align.CENTER);
+        mangaTxt(c,"⚔  ⚔",W*.42f,H*.47f,28,C("#EAF0FF"),Paint.Align.CENTER);mangaTxt(c,"− 1",W*.77f,H*.47f,21,C("#DFFF00"),Paint.Align.CENTER);
+        mangaTxt(c,"APPLY EACH RULE AFTER COUNTING",W*.50f,H*.545f,16,C("#D7E8FF"),Paint.Align.CENTER);
+        drawKeypad(c);mangaTxt(c,code.isEmpty()?"_ _ _":code,W*.50f,H*.60f,27,C("#FF5BAA"),Paint.Align.CENTER);
+        if(code.equals("481"))solved();if(code.length()>=3&&!code.equals("481")){showToast("NOPE");code="";}
+    }
+    private void drawKeypad(Canvas c){drawKeypadAt(c,getHeight()*.62f);}
+    private void drawKeypadAt(Canvas c,float top){int n=1;for(int r=0;r<3;r++)for(int col=0;col<3;col++){float x=getWidth()*.22f+col*getWidth()*.28f,y=top+r*dp(62);neonChip(c,x-dp(30),y-dp(25),dp(60),dp(50),C("#111936"),C("#39F7FF"));mangaTxt(c,String.valueOf(n++),x,y+sp(7),18,Color.WHITE,Paint.Align.CENTER);}}
 
     private void drawCarrot(Canvas c,float x,float y,float sc){
         c.save();c.translate(x,y);Path body=new Path();body.moveTo(-dp(34)*sc,-dp(15)*sc);body.quadTo(dp(7)*sc,-dp(20)*sc,dp(50)*sc,0);body.quadTo(dp(7)*sc,dp(20)*sc,-dp(34)*sc,dp(15)*sc);body.close();p.setStyle(Paint.Style.FILL);p.setColor(C("#FF7A18"));c.drawPath(body,p);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(dp(3)*sc);p.setColor(C("#FFB13B"));c.drawLine(-dp(15)*sc,-dp(9)*sc,dp(3)*sc,-dp(5)*sc,p);c.drawLine(-dp(8)*sc,dp(7)*sc,dp(12)*sc,dp(4)*sc,p);p.setStyle(Paint.Style.FILL);p.setColor(C("#39F77A"));for(int i=-1;i<=1;i++){Path leaf=new Path();leaf.moveTo(-dp(34)*sc,0);leaf.quadTo(-dp(52)*sc,dp(11*i)*sc,-dp(58)*sc,dp(25*i)*sc);leaf.quadTo(-dp(42)*sc,dp(14*i)*sc,-dp(31)*sc,dp(5*i)*sc);leaf.close();c.drawPath(leaf,p);}c.restore();
     }
+    private void playSnowScream(){
+        if(snowScreamPlayer==null||snowScreamPlayed) return;
+        snowScreamPlayed=true;
+        try{snowScreamPlayer.seekTo(0);snowScreamPlayer.start();}catch(Exception ignored){}
+    }
+
     private void l21(Canvas c){
         header(c,"Build his face. Try not to traumatize him.");
         float left=getWidth()*.18f,top=getHeight()*.30f,right=getWidth()*.82f,bottom=getHeight()*.75f,cx=(left+right)/2f,h=bottom-top,headY=top+h*.30f;
-        long now=System.currentTimeMillis();float warnT=snowEasterPhase==1?Math.min(1f,(now-snowEasterAt)/1150f):0f;float meltT=snowEasterPhase==2?Math.min(1f,(now-snowEasterAt)/2300f):0f;
-        if(snowEasterPhase<2){c.save();if(snowEasterPhase==1)c.translate((float)Math.sin((now-snowEasterAt)/30.0)*dp(5),0);if(snowmanArt!=null)c.drawBitmap(snowmanArt,new Rect(0,0,snowmanArt.getWidth(),snowmanArt.getHeight()),new RectF(left,top,right,bottom),p);
+        long now=System.currentTimeMillis();
+        float t=(now-snowEasterAt)/1000f;
+
+        // base snowman. During the melt the body collapses vertically into one puddle.
+        if(snowEasterPhase<3){
+            c.save();
+            if(snowEasterPhase==1||snowEasterPhase==2)c.translate((float)Math.sin((now-snowEasterAt)/28.0)*dp(4),0);
+            if(snowmanArt!=null)c.drawBitmap(snowmanArt,new Rect(0,0,snowmanArt.getWidth(),snowmanArt.getHeight()),new RectF(left,top,right,bottom),p);
+            c.restore();
+        }else if(snowEasterPhase==3){
+            float mt=Math.min(1f,(now-snowEasterAt)/1500f);
+            if(snowmanArt!=null){
+                c.save();
+                c.translate(0,dp(118)*mt);
+                c.scale(1f+.06f*mt,Math.max(.08f,1f-.88f*mt),cx,bottom);
+                p.setAlpha((int)(255*(1f-.42f*mt)));
+                c.drawBitmap(snowmanArt,new Rect(0,0,snowmanArt.getWidth(),snowmanArt.getHeight()),new RectF(left,top,right,bottom),p);
+                p.setAlpha(255);
+                c.restore();
+            }
+            p.setStyle(Paint.Style.FILL);p.setColor(C("#D9F7FF"));
+            c.drawOval(cx-dp(70)-dp(95)*mt,bottom-dp(4),cx+dp(70)+dp(95)*mt,bottom+dp(28)+dp(22)*mt,p);
+            // props fall naturally rather than deforming with the body
+            c.save();c.rotate(38*mt,cx+dp(58),bottom-dp(36));drawCarrot(c,cx+dp(45)+dp(42)*mt,bottom-dp(78)+dp(92)*mt,.58f);c.restore();
+            p.setColor(C("#201D31"));c.drawOval(cx-dp(72),bottom-dp(13)+dp(42)*mt,cx-dp(18),bottom+dp(13)+dp(42)*mt,p);
+        }
+
+        // face pieces: the stones stay exactly where the player placed them inside the legal eye zones.
+        if(snowEasterPhase<2){
             if(snowEye1){p.setStyle(Paint.Style.FILL);p.setColor(C("#1B1B25"));c.drawCircle(stone1X,stone1Y,dp(13),p);p.setColor(Color.WHITE);c.drawCircle(stone1X-dp(4),stone1Y-dp(4),dp(3),p);}
             if(snowEye2){p.setStyle(Paint.Style.FILL);p.setColor(C("#1B1B25"));c.drawCircle(stone2X,stone2Y,dp(13),p);p.setColor(Color.WHITE);c.drawCircle(stone2X-dp(4),stone2Y-dp(4),dp(3),p);}
-            if(snowNose)drawCarrot(c,carrotX,carrotY,.60f);
-            if(!snowSmilePoints.isEmpty()){p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(dp(5));p.setStrokeCap(Paint.Cap.ROUND);p.setColor(C("#151522"));Path sm=new Path();PointF f=snowSmilePoints.get(0);sm.moveTo(f.x,f.y);for(int i=1;i<snowSmilePoints.size();i++){PointF q=snowSmilePoints.get(i);sm.lineTo(q.x,q.y);}c.drawPath(sm,p);p.setStrokeCap(Paint.Cap.BUTT);}
-            if(snowEasterPhase==1){float rr=dp(10)+dp(13)*warnT;p.setStyle(Paint.Style.FILL);p.setColor(Color.argb((int)(150+90*warnT),255,40,95));c.drawCircle(cx-dp(46),headY+dp(20),rr,p);c.drawCircle(cx+dp(46),headY+dp(20),rr,p);}c.restore();
-        } else {
-            // staged melt: body sinks/fades while puddle grows and props fall independently
-            p.setStyle(Paint.Style.FILL);p.setColor(C("#BFEFFF"));c.drawOval(cx-dp(45)-dp(120)*meltT,bottom-dp(2),cx+dp(45)+dp(120)*meltT,bottom+dp(22)+dp(34)*meltT,p);
-            if(snowmanArt!=null){p.setAlpha((int)(255*(1f-meltT)));c.save();c.translate(0,dp(70)*meltT);c.scale(1f+.12f*meltT,1f-.48f*meltT,cx,bottom);c.drawBitmap(snowmanArt,new Rect(0,0,snowmanArt.getWidth(),snowmanArt.getHeight()),new RectF(left,top,right,bottom),p);c.restore();p.setAlpha(255);}
-            p.setColor(C("#39F7FF"));for(int i=0;i<5;i++){float dx=(i-2)*dp(25);c.drawOval(cx+dx-dp(5),headY+dp(30)+dp(65)*meltT,cx+dx+dp(5),headY+dp(48)+dp(95)*meltT,p);}
-            // carrot tumbles out instead of stretching with the snowman
-            c.save();c.rotate(80*meltT,cx+dp(35),bottom-dp(40));drawCarrot(c,cx+dp(35)+dp(35)*meltT,bottom-dp(75)+dp(85)*meltT,.55f);c.restore();
+        }else if(snowEasterPhase==2){
+            float et=Math.min(1f,(now-snowEasterAt)/520f);
+            float e1x=stone1X+snowEye1VX*et, e1y=stone1Y+snowEye1VY*et+dp(42)*et*et;
+            float e2x=stone2X+snowEye2VX*et, e2y=stone2Y+snowEye2VY*et+dp(42)*et*et;
+            p.setStyle(Paint.Style.FILL);p.setColor(C("#1B1B25"));c.drawCircle(e1x,e1y,dp(13)*(1f-.15f*et),p);c.drawCircle(e2x,e2y,dp(13)*(1f-.15f*et),p);
+            p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(dp(4));p.setColor(C("#FFE94D"));c.drawLine(stone1X,stone1Y,e1x,e1y,p);c.drawLine(stone2X,stone2Y,e2x,e2y,p);
         }
-        if(snowEasterPhase==0){if(!snowNose)drawCarrot(c,carrotX,carrotY,.72f);if(!snowEye1){p.setStyle(Paint.Style.FILL);p.setColor(C("#25242D"));c.drawCircle(stone1X,stone1Y,dp(16),p);}if(!snowEye2){p.setColor(C("#25242D"));c.drawCircle(stone2X,stone2Y,dp(16),p);}mangaTxt(c,"MAKE HIM A FACE",getWidth()/2f,getHeight()*.875f,19,Color.WHITE,Paint.Align.CENTER);}
-        if(snowEasterPhase==1){speech(c,T("SNOW_NO"),getWidth()*.12f,getHeight()*.255f,getWidth()*.76f,dp(92));if(now-snowEasterAt>1250){snowEasterPhase=2;snowEasterAt=now;}}else if(snowEasterPhase==2&&meltT>=1f){snowEasterPhase=3;snowEasterAt=now;}
-        if(snowEasterPhase==3){p.setStyle(Paint.Style.FILL);p.setColor(Color.argb(225,4,6,18));c.drawRect(0,0,getWidth(),getHeight(),p);mangaTxt(c,"TOTAL MELTDOWN",getWidth()/2f,getHeight()*.37f,35,C("#FF2EA6"),Paint.Align.CENTER);wrap(c,"That was definitely the wrong end.",getWidth()/2f,getHeight()*.45f,getWidth()*.78f,21,Color.WHITE);button(c,T("RETRY"),getWidth()*.18f,getHeight()*.58f,getWidth()*.64f,dp(66),C("#DFFF00"));button(c,"MENU",getWidth()*.18f,getHeight()*.68f,getWidth()*.64f,dp(60),C("#39F7FF"));}
+
+        if(snowNose&&snowEasterPhase<3)drawCarrot(c,carrotX,carrotY,.60f);
+        if(!snowSmilePoints.isEmpty()&&snowEasterPhase<3){p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(dp(5));p.setStrokeCap(Paint.Cap.ROUND);p.setColor(C("#151522"));Path sm=new Path();PointF f=snowSmilePoints.get(0);sm.moveTo(f.x,f.y);for(int i=1;i<snowSmilePoints.size();i++){PointF q=snowSmilePoints.get(i);sm.lineTo(q.x,q.y);}c.drawPath(sm,p);p.setStrokeCap(Paint.Cap.BUTT);}
+
+        if(snowEasterPhase==1){
+            float bt=Math.min(1f,(now-snowEasterAt)/650f);
+            p.setStyle(Paint.Style.FILL);p.setColor(Color.argb((int)(90+150*bt),255,45,95));
+            c.drawCircle(cx-dp(46),headY+dp(20),dp(10)+dp(12)*bt,p);c.drawCircle(cx+dp(46),headY+dp(20),dp(10)+dp(12)*bt,p);
+            speech(c,T("SNOW_NO"),getWidth()*.12f,getHeight()*.255f,getWidth()*.76f,dp(92));
+            if(t>.58f){playSnowScream();snowEasterPhase=2;snowEasterAt=now;snowEye1VX=-dp(190);snowEye1VY=-dp(150);snowEye2VX=dp(210);snowEye2VY=-dp(165);}
+        }else if(snowEasterPhase==2){
+            if(now-snowEasterAt>560){snowEasterPhase=3;snowEasterAt=now;}
+        }else if(snowEasterPhase==3){
+            if(now-snowEasterAt>1550){
+                snowEasterPhase=4;snowEasterAt=now;
+                if(!snowMeltdownAdShown){
+                    snowMeltdownAdShown=true;returnToSnowFailAfterAd=true;pendingScreenAfterAd=21;screen=95;fakeAdShownAt=now;lastFakeAdAt=now;levelsSinceFakeAd=0;((MainActivity)getContext()).syncMusicForScreen(95);return;
+                }
+            }
+        }
+
+        if(snowEasterPhase==0){
+            if(!snowNose)drawCarrot(c,carrotX,carrotY,.72f);
+            if(!snowEye1){p.setStyle(Paint.Style.FILL);p.setColor(C("#25242D"));c.drawCircle(stone1X,stone1Y,dp(16),p);}
+            if(!snowEye2){p.setColor(C("#25242D"));c.drawCircle(stone2X,stone2Y,dp(16),p);}
+            mangaTxt(c,"MAKE HIM A FACE",getWidth()/2f,getHeight()*.875f,19,Color.WHITE,Paint.Align.CENTER);
+        }
+        if(snowEasterPhase==4){
+            p.setStyle(Paint.Style.FILL);p.setColor(Color.argb(225,4,6,18));c.drawRect(0,0,getWidth(),getHeight(),p);
+            mangaTxt(c,"TOTAL MELTDOWN",getWidth()/2f,getHeight()*.37f,35,C("#FF2EA6"),Paint.Align.CENTER);
+            wrap(c,"That was definitely the wrong end.",getWidth()/2f,getHeight()*.45f,getWidth()*.78f,21,Color.WHITE);
+            button(c,T("RETRY"),getWidth()*.18f,getHeight()*.58f,getWidth()*.64f,dp(66),C("#DFFF00"));button(c,T("MENU"),getWidth()*.18f,getHeight()*.68f,getWidth()*.64f,dp(60),C("#39F7FF"));
+        }
         if(snowEye1&&snowEye2&&snowNose&&snowSmile&&snowEasterPhase==0)solved();
     }
     private void l22(Canvas c){ header(c,"He always chooses the WRONG door."); chibi(c,getWidth()*.5f,getHeight()*.40f,1.25f,true,true); speech(c,"I PICK LEFT!",getWidth()*.22f,getHeight()*.49f,getWidth()*.56f,dp(95)); button(c,"LEFT",getWidth()*.10f,getHeight()*.70f,getWidth()*.34f,dp(64),C("#FF8D7C")); button(c,"RIGHT",getWidth()*.56f,getHeight()*.70f,getWidth()*.34f,dp(64),C("#39F7FF")); wrap(c,"If his choice is always wrong, which door is safe?",getWidth()/2f,getHeight()*.84f,getWidth()*.82f,19,C("#3F4156")); if(oppositeChoice==1)solved(); }
@@ -721,11 +806,12 @@ public class GameView extends View implements SensorEventListener {
             float left=getWidth()*.14f,top=getHeight()*.27f,right=getWidth()*.86f,bottom=getHeight()*.70f;neonPanel(c,left-dp(8),top-dp(8),right-left+dp(16),bottom-top+dp(16),C("#11183B"),C("#39F7FF"));Rect src=new Rect(0,0,selfieBitmap.getWidth(),selfieBitmap.getHeight());RectF dst=new RectF(left,top,right,bottom);c.drawBitmap(selfieBitmap,src,dst,p);
             float fx=left+(right-left)*selfieFaceCx, fy=top+(bottom-top)*selfieFaceCy, ed=(right-left)*selfieEyeDist;
             if(!selfieFaceFound){fx=cx;fy=top+(bottom-top)*.42f;ed=(right-left)*.21f;}
-            // ludicrous neon star-ish glasses aligned to detected eyes
-            p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(dp(9));p.setColor(C("#DFFF00"));float gy=fy,gw=ed*.78f,gh=ed*.40f;c.drawOval(fx-ed-gw*.55f,gy-gh,fx-ed+gw*.55f,gy+gh,p);c.drawOval(fx+ed-gw*.55f,gy-gh,fx+ed+gw*.55f,gy+gh,p);p.setColor(C("#FF2EA6"));c.drawLine(fx-ed*.35f,gy,fx+ed*.35f,gy,p);
-            p.setStyle(Paint.Style.FILL);p.setColor(Color.argb(120,57,247,255));c.drawCircle(fx-ed,gy,gh*.75f,p);p.setColor(Color.argb(120,255,46,166));c.drawCircle(fx+ed,gy,gh*.75f,p);
-            // moustache under detected nose area
-            float my=fy+ed*.95f;p.setColor(C("#6A22FF"));Path m=new Path();m.moveTo(fx,my);m.cubicTo(fx-ed*.18f,my-ed*.36f,fx-ed*.85f,my-ed*.28f,fx-ed*1.05f,my+ed*.14f);m.cubicTo(fx-ed*.62f,my,fx-ed*.32f,my+ed*.38f,fx,my+ed*.12f);m.cubicTo(fx+ed*.32f,my+ed*.38f,fx+ed*.62f,my,fx+ed*1.05f,my+ed*.14f);m.cubicTo(fx+ed*.85f,my-ed*.28f,fx+ed*.18f,my-ed*.36f,fx,my);c.drawPath(m,p);
+            // deliberately ridiculous party glasses: star lens + spiral lens, aligned to detected eyes
+            float gy=fy,gr=ed*.52f;p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(dp(8));p.setStrokeJoin(Paint.Join.ROUND);
+            Path star=new Path();for(int k=0;k<10;k++){double aa=-Math.PI/2+k*Math.PI/5;float rr=(k%2==0?gr:gr*.45f);float sx=fx-ed+(float)Math.cos(aa)*rr,sy=gy+(float)Math.sin(aa)*rr;if(k==0)star.moveTo(sx,sy);else star.lineTo(sx,sy);}star.close();p.setColor(C("#DFFF00"));c.drawPath(star,p);p.setStyle(Paint.Style.FILL);p.setColor(Color.argb(95,57,247,255));c.drawPath(star,p);
+            p.setStyle(Paint.Style.STROKE);p.setColor(C("#FF2EA6"));p.setStrokeWidth(dp(8));c.drawCircle(fx+ed,gy,gr,p);Path spiral=new Path();for(int k=0;k<30;k++){float tt=k/29f;double aa=tt*Math.PI*4;float rr=gr*(1f-tt*.82f);float sx=fx+ed+(float)Math.cos(aa)*rr,sy=gy+(float)Math.sin(aa)*rr;if(k==0)spiral.moveTo(sx,sy);else spiral.lineTo(sx,sy);}c.drawPath(spiral,p);p.setColor(C("#39F7FF"));c.drawLine(fx-ed*.35f,gy,fx+ed*.35f,gy,p);p.setStrokeJoin(Paint.Join.MITER);
+            // curled cartoon moustache under the detected nose
+            float my=fy+ed*.98f;p.setStyle(Paint.Style.FILL);p.setColor(C("#7B2CFF"));Path m=new Path();m.moveTo(fx,my);m.cubicTo(fx-ed*.22f,my-ed*.38f,fx-ed*.88f,my-ed*.30f,fx-ed*1.12f,my+ed*.10f);m.cubicTo(fx-ed*.86f,my+ed*.07f,fx-ed*.52f,my+ed*.42f,fx,my+ed*.13f);m.cubicTo(fx+ed*.52f,my+ed*.42f,fx+ed*.86f,my+ed*.07f,fx+ed*1.12f,my+ed*.10f);m.cubicTo(fx+ed*.88f,my-ed*.30f,fx+ed*.22f,my-ed*.38f,fx,my);c.drawPath(m,p);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(dp(3));p.setColor(C("#FFE94D"));c.drawPath(m,p);
             mangaTxt(c,selfieFaceFound?"FACE LOCKED. STYLE DESTROYED.":"CLOSE ENOUGH. CHAOS WINS.",cx,getHeight()*.76f,18,C("#FFE94D"),Paint.Align.CENTER);if(selfieCapturedAt>0&&System.currentTimeMillis()-selfieCapturedAt>2800)solved();
         }
     }
@@ -778,61 +864,94 @@ public class GameView extends View implements SensorEventListener {
 
     private void keyProgress(Canvas c,int mask,int total){mangaTxt(c,"FOUND "+Integer.bitCount(mask)+" / "+total,getWidth()/2f,getHeight()*.86f,17,C("#FF5BAA"),Paint.Align.CENTER);}
     private void l28(Canvas c){
-        header(c,"Move things. The pieces are physically underneath them.");float dt=getHeight()*.40f;drawAssemblySlots(c);
-        neonPanel(c,getWidth()*.08f,dt,getWidth()*.84f,dp(28),C("#18214C"),C("#39F7FF"));
-        neonPanel(c,getWidth()*.12f,dt+dp(30),getWidth()*.30f,dp(102),C("#CF6D38"),C("#FFE94D"));mangaTxt(c,deskDrawerOpen?"OPEN":"DRAWER",getWidth()*.27f,dt+dp(90),17,Color.WHITE,Paint.Align.CENTER);
-        if(deskDrawerOpen){if((deskMask&1)==0){deskMask|=1;foundPieceX[0]=getWidth()*.27f;foundPieceY[0]=dt+dp(74);}drawFoundPiece(c,deskMask,0);}
-        p.setStyle(Paint.Style.FILL);p.setColor(C("#39F7FF"));c.drawCircle(deskMugX,deskMugY,dp(36),p);p.setColor(C("#0B1030"));c.drawCircle(deskMugX+dp(26),deskMugY,dp(17),p);mangaTxt(c,"MUG",deskMugX,deskMugY+sp(6),13,C("#081020"),Paint.Align.CENTER);
-        if(Math.abs(deskMugX-getWidth()*.63f)>dp(80)){if((deskMask&2)==0){deskMask|=2;foundPieceX[1]=getWidth()*.63f;foundPieceY[1]=getHeight()*.58f;}drawFoundPiece(c,deskMask,1);}
-        neonChip(c,getWidth()*.66f,getHeight()*.38f,getWidth()*.22f,dp(76),C("#FF2EA6"),C("#FFE94D"));mangaTxt(c,"BOOK",getWidth()*.77f,getHeight()*.425f,17,Color.WHITE,Paint.Align.CENTER);
-        if(deskBookHold>0&&System.currentTimeMillis()-deskBookHold>1050){if((deskMask&4)==0){deskMask|=4;foundPieceX[2]=getWidth()*.77f;foundPieceY[2]=getHeight()*.49f;}drawFoundPiece(c,deskMask,2);}
-        drawPlacedKey(c);keyProgress(c,deskMask,3);if(foundPlacedMask==7){door(c,getWidth()*.84f,getHeight()*.61f,getWidth()*.17f,getHeight()*.17f);if(finalKeyDrag&&Math.hypot(finalKeyX-getWidth()*.84f,finalKeyY-getHeight()*.61f)<dp(60))solved();}
+        header(c,"Three digits are hidden under the clutter.");float W=getWidth(),H=getHeight();
+        // desk surface
+        neonPanel(c,W*.07f,H*.32f,W*.86f,H*.25f,C("#3C2147"),C("#FF5BAA"));
+        // fixed hidden clues, always present below the movable objects
+        mangaTxt(c,"7",W*.25f,H*.43f,34,C("#FFE94D"),Paint.Align.CENTER);
+        mangaTxt(c,"2",W*.62f,H*.49f,34,C("#39F7FF"),Paint.Align.CENTER);
+        mangaTxt(c,"9",W*.76f,H*.39f,34,C("#DFFF00"),Paint.Align.CENTER);
+        // sliding drawer over digit 7
+        float dx=deskDrawerX;neonPanel(c,dx,H*.355f,W*.28f,dp(95),C("#9A5434"),C("#FFE94D"));
+        p.setStyle(Paint.Style.FILL);p.setColor(C("#111936"));c.drawRoundRect(dx+W*.11f,H*.38f,dx+W*.17f,H*.397f,dp(6),dp(6),p);
+        // mug over digit 2
+        p.setStyle(Paint.Style.FILL);p.setColor(C("#39F7FF"));c.drawCircle(deskMugX,deskMugY,dp(38),p);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(dp(9));p.setColor(C("#39F7FF"));c.drawArc(deskMugX+dp(16),deskMugY-dp(20),deskMugX+dp(58),deskMugY+dp(20),-80,160,false,p);
+        // book over digit 9
+        c.save();c.rotate(-8,deskBookX,deskBookY);neonChip(c,deskBookX-dp(62),deskBookY-dp(37),dp(124),dp(74),C("#8E2B67"),C("#DFFF00"));mangaTxt(c,"NOTES",deskBookX,deskBookY+sp(6),15,Color.WHITE,Paint.Align.CENTER);c.restore();
+        mangaTxt(c,"DRAG THE CLUTTER AWAY",W*.5f,H*.595f,17,C("#D7E8FF"),Paint.Align.CENTER);
+        drawKeypadAt(c,H*.665f);mangaTxt(c,deskCode.isEmpty()?"_ _ _":deskCode,W*.5f,H*.635f,23,C("#FFE94D"),Paint.Align.CENTER);
+        if(deskCode.equals("729"))solved();if(deskCode.length()>=3&&!deskCode.equals("729")){showToast("WRONG CODE");deskCode="";}
     }
     private void l29(Canvas c){
-        header(c,"Everything in the box can move or react.");neonPanel(c,getWidth()*.08f,getHeight()*.34f,getWidth()*.84f,getHeight()*.30f,C("#33165F"),C("#9D6CFF"));drawAssemblySlots(c);
-        // draw pieces BEFORE objects so they visibly sit underneath once the object moves
-        if((toyMask&1)!=0)drawFoundPiece(c,toyMask,0);if((toyMask&2)!=0)drawFoundPiece(c,toyMask,1);if((toyMask&4)!=0)drawFoundPiece(c,toyMask,2);
-        mangaTxt(c,"🧸",toyBearTaps>=2?getWidth()*.18f:getWidth()*.28f,toyBearTaps>=2?getHeight()*.44f:getHeight()*.49f,48,Color.WHITE,Paint.Align.CENTER);p.setStyle(Paint.Style.FILL);p.setColor(C("#FF5BAA"));c.drawCircle(toyBallX,toyBallY,dp(39),p);mangaTxt(c,"🤖",(shakeCount-toyShakeStart>=2)?getWidth()*.42f:getWidth()*.50f,(shakeCount-toyShakeStart>=2)?getHeight()*.52f:getHeight()*.59f,46,Color.WHITE,Paint.Align.CENTER);
-        if(toyBearTaps>=2&&(toyMask&1)==0){toyMask|=1;foundPieceX[0]=getWidth()*.28f;foundPieceY[0]=getHeight()*.53f;}
-        if(Math.abs(toyBallX-getWidth()*.70f)>dp(100)&&(toyMask&2)==0){toyMask|=2;foundPieceX[1]=getWidth()*.70f;foundPieceY[1]=getHeight()*.55f;}
-        if(shakeCount-toyShakeStart>=2&&(toyMask&4)==0){toyMask|=4;foundPieceX[2]=getWidth()*.50f;foundPieceY[2]=getHeight()*.64f;}
-        drawPlacedKey(c);keyProgress(c,toyMask,3);if(foundPlacedMask==7){door(c,getWidth()*.84f,getHeight()*.63f,getWidth()*.17f,getHeight()*.17f);if(finalKeyDrag&&Math.hypot(finalKeyX-getWidth()*.84f,finalKeyY-getHeight()*.63f)<dp(60))solved();}
+        header(c,"Roll the ball into the center.");float W=getWidth(),H=getHeight();float L=W*.08f,R=W*.92f,T=H*.31f,B=H*.78f;
+        neonPanel(c,L,T,R-L,B-T,C("#0E1634"),C("#39F7FF"));
+        // concentric maze walls with alternating gaps
+        p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(dp(12));p.setStrokeCap(Paint.Cap.ROUND);int[] cols={C("#FF2EA6"),C("#FFE94D"),C("#9D6CFF")};
+        float cx=W*.5f,cy=H*.54f;for(int i=0;i<3;i++){float rad=dp(72+i*48);p.setColor(cols[i]);float gap=(i%2==0)?35:205;c.drawArc(cx-rad,cy-rad,cx+rad,cy+rad,gap+28,304,false,p);}p.setStrokeCap(Paint.Cap.BUTT);
+        long n=System.nanoTime();float dt=Math.min(.035f,(n-lastFrame)/1_000_000_000f);lastFrame=n;mazeVX+=ax*42*dt;mazeVY+=ay*42*dt;mazeVX*=.985f;mazeVY*=.985f;float ox=mazeBallX,oy=mazeBallY;mazeBallX+=mazeVX;mazeBallY+=mazeVY;float br=dp(14);if(mazeBallX<L+br||mazeBallX>R-br||mazeBallY<T+br||mazeBallY>B-br){mazeBallX=ox;mazeBallY=oy;mazeVX*=-.45f;mazeVY*=-.45f;}
+        // approximate circular wall collision with gaps
+        for(int i=0;i<3;i++){float rad=dp(72+i*48);float d=(float)Math.hypot(mazeBallX-cx,mazeBallY-cy);if(Math.abs(d-rad)<dp(11)){double ang=(Math.toDegrees(Math.atan2(mazeBallY-cy,mazeBallX-cx))+360)%360;double gap=(i%2==0)?35:205;double diff=Math.abs(((ang-gap+540)%360)-180);if(diff>34){mazeBallX=ox;mazeBallY=oy;mazeVX*=-.58f;mazeVY*=-.58f;}}}
+        p.setStyle(Paint.Style.FILL);p.setColor(C("#DFFF00"));c.drawCircle(cx,cy,dp(28),p);p.setColor(C("#090D1E"));c.drawCircle(cx,cy,dp(14),p);p.setColor(C("#FFE94D"));c.drawCircle(mazeBallX,mazeBallY,br,p);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(dp(3));p.setColor(C("#FF2EA6"));c.drawCircle(mazeBallX,mazeBallY,br,p);
+        if(Math.hypot(mazeBallX-cx,mazeBallY-cy)<dp(25))solved();
     }
     private void l30(Canvas c){
-        header(c,"Breakfast is sitting on top of the evidence.");drawAssemblySlots(c);
-        if((kitchenMask&1)!=0)drawFoundPiece(c,kitchenMask,0);if((kitchenMask&2)!=0)drawFoundPiece(c,kitchenMask,1);if((kitchenMask&4)!=0)drawFoundPiece(c,kitchenMask,2);
-        p.setStyle(Paint.Style.FILL);p.setColor(C("#FF3B5C"));c.drawCircle(appleX,appleY,dp(35),p);mangaTxt(c,"APPLE",appleX,appleY+sp(6),12,Color.WHITE,Paint.Align.CENTER);
-        neonPanel(c,getWidth()*.48f,getHeight()*.43f,getWidth()*.28f,dp(96),C("#49506A"),C("#39F7FF"));mangaTxt(c,"TOASTER",getWidth()*.62f,getHeight()*.49f,15,Color.WHITE,Paint.Align.CENTER);
-        p.setStyle(Paint.Style.FILL);p.setColor(C("#FFE94D"));c.drawCircle(getWidth()*.50f,getHeight()*.62f,dp(46),p);mangaTxt(c,"JAR",getWidth()*.50f,getHeight()*.63f,16,C("#090D1E"),Paint.Align.CENTER);
-        if(Math.abs(appleX-getWidth()*.30f)>dp(90)&&(kitchenMask&1)==0){kitchenMask|=1;foundPieceX[0]=getWidth()*.30f;foundPieceY[0]=getHeight()*.56f;}
-        if(toasterTaps>=3&&(kitchenMask&2)==0){kitchenMask|=2;foundPieceX[1]=getWidth()*.62f;foundPieceY[1]=getHeight()*.56f;}
-        if(jarTwist>260&&(kitchenMask&4)==0){kitchenMask|=4;foundPieceX[2]=getWidth()*.50f;foundPieceY[2]=getHeight()*.69f;}
-        drawPlacedKey(c);keyProgress(c,kitchenMask,3);if(foundPlacedMask==7){door(c,getWidth()*.84f,getHeight()*.61f,getWidth()*.17f,getHeight()*.17f);if(finalKeyDrag&&Math.hypot(finalKeyX-getWidth()*.84f,finalKeyY-getHeight()*.61f)<dp(60))solved();}
+        header(c,"Smash the moving piñata until the prize drops.");float W=getWidth(),H=getHeight();
+        long n=System.nanoTime();float dt=Math.min(.035f,(n-lastFrame)/1_000_000_000f);lastFrame=n;
+        pinataAV += (-2.3f*(float)Math.sin(pinataAngle)+ax*.13f+gz*.35f)*dt;pinataAV*=.992f;pinataAngle+=pinataAV*dt;pinataAngle=Math.max(-1.05f,Math.min(1.05f,pinataAngle));
+        float anchorX=W*.5f,anchorY=H*.31f,len=dp(210);float px=anchorX+(float)Math.sin(pinataAngle)*len,py=anchorY+(float)Math.cos(pinataAngle)*len;
+        p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(dp(5));p.setColor(C("#EAF0FF"));c.drawLine(anchorX,anchorY,px,py-dp(48),p);
+        c.save();c.translate(px,py);c.rotate((float)Math.toDegrees(pinataAngle));float pulse=System.currentTimeMillis()<pinataFlashUntil?1.13f:1f;c.scale(pulse,pulse);p.setStyle(Paint.Style.FILL);p.setColor(C("#FF2EA6"));Path body=new Path();body.moveTo(-dp(58),-dp(25));body.lineTo(-dp(30),-dp(55));body.lineTo(dp(44),-dp(45));body.lineTo(dp(62),0);body.lineTo(dp(35),dp(52));body.lineTo(-dp(42),dp(46));body.close();c.drawPath(body,p);p.setColor(C("#39F7FF"));c.drawRect(-dp(45),-dp(10),dp(50),dp(5),p);p.setColor(C("#FFE94D"));c.drawRect(-dp(38),dp(15),dp(42),dp(29),p);p.setColor(C("#DFFF00"));c.drawCircle(-dp(28),-dp(39),dp(8),p);c.restore();
+        mangaTxt(c,"HITS  "+pinataHits+" / 8",W*.5f,H*.80f,19,C("#FFE94D"),Paint.Align.CENTER);
+        if(pinataHits>=8){for(int i=0;i<9;i++){float a=(float)(i*Math.PI*2/9);p.setColor(new int[]{C("#39F7FF"),C("#FF2EA6"),C("#FFE94D")}[i%3]);c.drawCircle(px+(float)Math.cos(a)*dp(70),py+(float)Math.sin(a)*dp(60),dp(7),p);}mangaTxt(c,"★ PRIZE! ★",W*.5f,H*.69f,27,C("#DFFF00"),Paint.Align.CENTER);if(System.currentTimeMillis()-pinataFlashUntil>650)solved();}
     }
-    private void l31(Canvas c){header(c,"Three compartments. Three different phone tricks.");float[] xs={.22f,.50f,.78f};String[] labs={"SHAKE","HOLD","TILT"};for(int i=0;i<3;i++){rr(c,getWidth()*xs[i]-dp(62),getHeight()*.42f,dp(124),dp(145),dp(18),Color.WHITE);mangaTxt(c,labs[i],getWidth()*xs[i],getHeight()*.49f,17,C("#EAF0FF"),Paint.Align.CENTER);if((vaultMask&(1<<i))!=0)keyPiece(c,getWidth()*xs[i],getHeight()*.57f,i);}if(shakeCount-vaultShakeStart>=2)vaultMask|=1;if(ax>6f){if(vaultTiltStart==0)vaultTiltStart=System.currentTimeMillis();if(System.currentTimeMillis()-vaultTiltStart>800)vaultMask|=4;}else vaultTiltStart=0;keyProgress(c,vaultMask,3);if(vaultMask==7){door(c,getWidth()*.5f,getHeight()*.72f,getWidth()*.22f,getHeight()*.18f);if(System.currentTimeMillis()-roomStart>900)solved();}}
+    private void l31(Canvas c){
+        header(c,"Make the two layers become one symbol.");float W=getWidth(),H=getHeight();float tx=W*.50f,ty=H*.54f;
+        // rear layer
+        p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(dp(16));p.setColor(C("#FF2EA6"));c.drawArc(tx-dp(80),ty-dp(80),tx+dp(80),ty+dp(80),35,230,false,p);
+        // draggable foreground slash
+        p.setStrokeWidth(dp(18));p.setColor(C("#39F7FF"));c.drawLine(perspectiveX-dp(50),perspectiveY+dp(55),perspectiveX+dp(50),perspectiveY-dp(55),p);
+        p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(dp(2));p.setColor(C("#5E6A99"));c.drawCircle(tx,ty,dp(110),p);
+        mangaTxt(c,"ALIGN THE LAYERS",W*.5f,H*.76f,19,C("#D7E8FF"),Paint.Align.CENTER);
+        if(Math.hypot(perspectiveX-tx,perspectiveY-ty)<dp(24)){p.setStyle(Paint.Style.FILL);p.setColor(Color.argb(70,223,255,0));c.drawCircle(tx,ty,dp(120),p);mangaTxt(c,"SNAP!",tx,ty+dp(150),22,C("#DFFF00"),Paint.Align.CENTER);if(System.currentTimeMillis()-roomStart>500)solved();}
+    }
     private void playSoundSeq(){if(soundPlaying)return;soundPlaying=true;soundReady=false;soundTaps.clear();int[] at={0,380,760,1140};int[] tones={ToneGenerator.TONE_DTMF_1,ToneGenerator.TONE_DTMF_3,ToneGenerator.TONE_DTMF_2,ToneGenerator.TONE_DTMF_1};for(int i=0;i<4;i++){final int k=i;handler.postDelayed(()->{if(screen==32){tone.startTone(tones[k],170);invalidate();}},at[i]);}handler.postDelayed(()->{if(screen==32){soundPlaying=false;soundReady=true;showToast("REPEAT THE PITCHES!");invalidate();}},1500);}
-    private void l32(Canvas c){header(c,"Align the four lock pins with their notches.");float baseY=getHeight()*.68f;float[] xs={.20f,.40f,.60f,.80f};boolean ok=true;for(int i=0;i<4;i++){float x=getWidth()*xs[i];float targetY=baseY-dp(42)*pinTarget[i];float py=baseY-dp(42)*pinPos[i];rr(c,x-dp(31),getHeight()*.38f,dp(62),dp(210),dp(14),Color.WHITE);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(dp(4));p.setColor(C("#FF5BAA"));c.drawLine(x-dp(25),targetY,x+dp(25),targetY,p);p.setStyle(Paint.Style.FILL);p.setColor(C("#45445B"));c.drawRoundRect(x-dp(19),py-dp(15),x+dp(19),py+dp(15),dp(7),dp(7),p);if(pinPos[i]!=pinTarget[i])ok=false;}mangaTxt(c,ok?"CLICK — UNLOCKED":"TAP A PIN TO CHANGE ITS HEIGHT",getWidth()/2f,getHeight()*.82f,19,ok?C("#55A868"):C("#EAF0FF"),Paint.Align.CENTER);if(ok&&System.currentTimeMillis()-roomStart>450)solved();}
+    private void l32(Canvas c){
+        header(c,"Drag every colored piston to its matching notch.");float W=getWidth(),H=getHeight();float[] xs={.18f,.39f,.61f,.82f};float[] target={H*.48f,H*.57f,H*.43f,H*.62f};int[] col={C("#39F7FF"),C("#FF2EA6"),C("#FFE94D"),C("#DFFF00")};boolean ok=true;
+        for(int i=0;i<4;i++){float x=W*xs[i];neonPanel(c,x-dp(30),H*.36f,dp(60),H*.34f,C("#101734"),col[i]);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(dp(5));p.setColor(col[i]);c.drawLine(x-dp(24),target[i],x+dp(24),target[i],p);p.setStyle(Paint.Style.FILL);p.setColor(col[i]);c.drawRoundRect(x-dp(23),pinY[i]-dp(18),x+dp(23),pinY[i]+dp(18),dp(9),dp(9),p);p.setColor(C("#0A0F22"));c.drawCircle(x,pinY[i],dp(7),p);if(Math.abs(pinY[i]-target[i])>dp(12))ok=false;}
+        mangaTxt(c,ok?"ALL FOUR LOCKED":"DRAG — DON'T TAP",W*.5f,H*.80f,19,ok?C("#DFFF00"):C("#D7E8FF"),Paint.Align.CENTER);if(ok)solved();
+    }
     private void checkSoundSeq(){if(soundTaps.size()<4)return;boolean ok=true;for(int i=0;i<4;i++)if(soundTaps.get(i)!=soundSeq[i])ok=false;if(ok)solved();else{showToast("WRONG MELODY");soundReady=false;soundTaps.clear();}}
-    private void l33(Canvas c){header(c,"Odd sides first. Then even sides. Reverse the second group.");float[] xs={.18f,.39f,.61f,.82f};int[] sides={3,4,5,6};for(int i=0;i<4;i++){drawPoly(c,getWidth()*xs[i],getHeight()*.54f,dp(45),sides[i],new int[]{C("#FF5BAA"),C("#39F7FF"),C("#FFE94D"),C("#8C77D9")}[i]);mangaTxt(c,String.valueOf(sides[i]),getWidth()*xs[i],getHeight()*.67f,18,C("#EAF0FF"),Paint.Align.CENTER);}mangaTxt(c,"STEP "+logicPos+" / 4",getWidth()/2f,getHeight()*.76f,21,C("#FF5BAA"),Paint.Align.CENTER);}
+    private void l33(Canvas c){
+        header(c,"Fewest interior angles to most.");float W=getWidth(),H=getHeight();float[] xs={.18f,.40f,.62f,.82f};int[] sides={6,3,8,5};int[] cols={C("#39F7FF"),C("#FFE94D"),C("#FF2EA6"),C("#DFFF00")};
+        for(int i=0;i<4;i++){drawPoly(c,W*xs[i],H*.54f,dp(43),sides[i],cols[i]);}
+        mangaTxt(c,"STEP "+logicPos+" / 4",W*.5f,H*.73f,20,C("#EAF0FF"),Paint.Align.CENTER);
+    }
     private void drawPoly(Canvas c,float cx,float cy,float r,int sides,int col){Path q=new Path();for(int i=0;i<sides;i++){double a=-Math.PI/2+i*Math.PI*2/sides;float x=cx+(float)Math.cos(a)*r,y=cy+(float)Math.sin(a)*r;if(i==0)q.moveTo(x,y);else q.lineTo(x,y);}q.close();p.setStyle(Paint.Style.FILL);p.setColor(col);c.drawPath(q,p);}
     private void l34(Canvas c){header(c,"Someone covered the code with grime.");float l=getWidth()*.14f,t=getHeight()*.36f,r=getWidth()*.86f,b=getHeight()*.58f;rr(c,l,t,r-l,b-t,dp(20),C("#5D5A63"));if(rubProgress>20){float aa=Math.min(1f,rubProgress/120f);p.setColor(Color.argb((int)(255*aa),255,255,255));p.setTextSize(sp(44));p.setTypeface(Typeface.DEFAULT_BOLD);p.setTextAlign(Paint.Align.CENTER);c.drawText("5 7 3",getWidth()/2f,getHeight()*.49f,p);}mangaTxt(c,"RUBBED  "+Math.min(100,(int)(rubProgress/1.2f))+"%",getWidth()/2f,getHeight()*.63f,19,C("#FF5BAA"),Paint.Align.CENTER);if(rubProgress>=100){drawKeypad(c);mangaTxt(c,revealCode.isEmpty()?"_ _ _":revealCode,getWidth()/2f,getHeight()*.68f,26,C("#EAF0FF"),Paint.Align.CENTER);if(revealCode.equals("573"))solved();if(revealCode.length()>=3&&!revealCode.equals("573")){showToast("WRONG CODE");revealCode="";}}}
     private void l35(Canvas c){
-        header(c,"Open three hiding places. Then rebuild the key.");float y=getHeight()*.43f;drawAssemblySlots(c);
-        // 1: slide panel
-        neonChip(c,forgePanelX-dp(55),y-dp(50),dp(110),dp(100),C("#FF2EA6"),C("#39F7FF"));mangaTxt(c,"SLIDE",forgePanelX,y+sp(6),16,Color.WHITE,Paint.Align.CENTER);
-        if(Math.abs(forgePanelX-getWidth()*.56f)>dp(105)&&(forgeMask&1)==0){forgeMask|=1;foundPieceX[0]=getWidth()*.24f;foundPieceY[0]=y;}
-        // 2: crack box by tapping
-        neonChip(c,getWidth()*.44f,y-dp(50),dp(112),dp(100),C("#5E4517"),C("#FFE94D"));mangaTxt(c,"CRACK",getWidth()*.55f,y-sp(3),16,Color.WHITE,Paint.Align.CENTER);mangaTxt(c,"×",getWidth()*.55f,y+sp(28),25,C("#FFE94D"),Paint.Align.CENTER);
-        if(forgeGemTaps>=3&&(forgeMask&2)==0){forgeMask|=2;foundPieceX[1]=getWidth()*.55f;foundPieceY[1]=y+dp(68);}
-        // 3: obvious physical pull tab; no sensor/tilt
-        float px=getWidth()*.82f;neonChip(c,px-dp(45),forgePullY-dp(45),dp(90),dp(90),C("#39F7FF"),C("#FF2EA6"));mangaTxt(c,"PULL",px,forgePullY+sp(6),15,C("#081020"),Paint.Align.CENTER);
-        if(forgePullY>getHeight()*.56f&&(forgeMask&4)==0){forgeMask|=4;foundPieceX[2]=px;foundPieceY[2]=getHeight()*.60f;}
+        header(c,"Three mechanisms hide three matching parts.");float W=getWidth(),H=getHeight(),y=H*.45f;drawAssemblySlots(c);
+        // left sliding hatch: no label, physical handle and rails
+        p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(dp(4));p.setColor(C("#39F7FF"));c.drawLine(W*.08f,y-dp(55),W*.35f,y-dp(55),p);c.drawLine(W*.08f,y+dp(55),W*.35f,y+dp(55),p);neonPanel(c,forgePanelX-dp(53),y-dp(48),dp(106),dp(96),C("#202A59"),C("#FF2EA6"));p.setStyle(Paint.Style.FILL);p.setColor(C("#FFE94D"));c.drawRoundRect(forgePanelX-dp(17),y-dp(5),forgePanelX+dp(17),y+dp(5),dp(4),dp(4),p);
+        if(Math.abs(forgePanelX-W*.24f)>dp(75)&&(forgeMask&1)==0){forgeMask|=1;foundPieceX[0]=W*.17f;foundPieceY[0]=y;}
+        // center brittle cover progressively cracks
+        neonPanel(c,W*.43f,y-dp(48),W*.23f,dp(96),C("#44331B"),C("#FFE94D"));p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(dp(3));p.setColor(C("#FF5BAA"));for(int i=0;i<Math.min(4,forgeGemTaps+1);i++){float cx=W*.545f+(i-1.5f)*dp(8);c.drawLine(cx,y-dp(25),cx-dp(12),y+dp(25),p);}if(forgeGemTaps>=4&&(forgeMask&2)==0){forgeMask|=2;foundPieceX[1]=W*.545f;foundPieceY[1]=y+dp(58);}
+        // right hanging release on visible cable
+        float px=W*.82f;p.setColor(C("#D7E8FF"));p.setStrokeWidth(dp(4));c.drawLine(px,H*.34f,px,forgePullY-dp(35),p);neonChip(c,px-dp(35),forgePullY-dp(35),dp(70),dp(70),C("#39F7FF"),C("#DFFF00"));p.setStyle(Paint.Style.FILL);p.setColor(C("#0A0F22"));Path ar=new Path();ar.moveTo(px-dp(12),forgePullY-dp(6));ar.lineTo(px+dp(12),forgePullY-dp(6));ar.lineTo(px,forgePullY+dp(14));ar.close();c.drawPath(ar,p);if(forgePullY>H*.59f&&(forgeMask&4)==0){forgeMask|=4;foundPieceX[2]=px;foundPieceY[2]=H*.62f;}
         for(int i=0;i<3;i++)drawFoundPiece(c,forgeMask,i);drawPlacedKey(c);keyProgress(c,forgeMask&7,3);
-        if(foundPlacedMask==7){door(c,getWidth()*.84f,getHeight()*.62f,getWidth()*.17f,getHeight()*.17f);mangaTxt(c,"DRAG IT TO THE DOOR",getWidth()/2f,getHeight()*.84f,17,C("#DFFF00"),Paint.Align.CENTER);if(Math.hypot(finalKeyX-getWidth()*.84f,finalKeyY-getHeight()*.62f)<dp(58))solved();}
+        if(foundPlacedMask==7){mangaTxt(c,"ASSEMBLY COMPLETE",W*.5f,H*.84f,17,C("#DFFF00"),Paint.Align.CENTER);if(System.currentTimeMillis()-roomStart>900)solved();}
     }
 
     private void l36(Canvas c){header(c,"Copy the flashing switch order.");float[] xs={.25f,.50f,.75f};int[] cols={C("#39F7FF"),C("#FF2EA6"),C("#FFE94D")};for(int i=0;i<3;i++){p.setStyle(Paint.Style.FILL);p.setColor(cols[i]);c.drawCircle(getWidth()*xs[i],getHeight()*.53f,dp(44),p);mangaTxt(c,String.valueOf(i+1),getWidth()*xs[i],getHeight()*.54f+sp(8),21,C("#091020"),Paint.Align.CENTER);}mangaTxt(c,"2  →  1  →  3",getWidth()/2f,getHeight()*.70f,25,Color.WHITE,Paint.Align.CENTER);if(neonSwitchStep>=3)solved();}
-    private void l37(Canvas c){header(c,"Turn the dial to the glowing notch.");float cx=getWidth()*.5f,cy=getHeight()*.53f,r=dp(105);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(dp(12));p.setColor(C("#222A55"));c.drawCircle(cx,cy,r,p);p.setColor(C("#39F7FF"));c.drawArc(cx-r,cy-r,cx+r,cy+r,-38,12,false,p);double a=Math.toRadians(dialAngle);float px=cx+(float)Math.cos(a)*r*.72f,py=cy+(float)Math.sin(a)*r*.72f;p.setStrokeWidth(dp(8));p.setColor(C("#FFE94D"));c.drawLine(cx,cy,px,py,p);c.drawCircle(cx,cy,dp(18),p);if(Math.abs(((dialAngle+360)%360)-322)<8)solved();}
+    private void l37(Canvas c){
+        header(c,"Complete the circuit and light the lamp.");float W=getWidth(),H=getHeight(),cy=H*.55f;float bx=W*.10f,lx=W*.90f;
+        // battery
+        neonPanel(c,bx-dp(35),cy-dp(55),dp(70),dp(110),C("#121B3F"),C("#39F7FF"));p.setStyle(Paint.Style.FILL);p.setColor(C("#FFE94D"));c.drawRect(bx-dp(18),cy-dp(30),bx+dp(18),cy+dp(30),p);mangaTxt(c,"+",bx,cy-dp(10),18,C("#090D1E"),Paint.Align.CENTER);mangaTxt(c,"−",bx,cy+dp(24),18,C("#090D1E"),Paint.Align.CENTER);
+        // lamp
+        p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(dp(6));boolean ok=true;for(int i=0;i<4;i++)if(circuitRot[i]!=circuitTarget[i])ok=false;p.setColor(ok?C("#FFE94D"):C("#6670A1"));c.drawCircle(lx,cy-dp(8),dp(28),p);c.drawLine(lx-dp(16),cy+dp(26),lx+dp(16),cy+dp(26),p);c.drawLine(lx-dp(12),cy+dp(34),lx+dp(12),cy+dp(34),p);
+        // wire baseline and 4 modules
+        p.setStrokeWidth(dp(7));p.setColor(C("#5E6A99"));c.drawLine(bx+dp(36),cy,lx-dp(35),cy,p);float[] xs={.27f,.43f,.59f,.75f};for(int i=0;i<4;i++){float x=W*xs[i];neonPanel(c,x-dp(34),cy-dp(34),dp(68),dp(68),C("#111936"),new int[]{C("#39F7FF"),C("#FF2EA6"),C("#FFE94D"),C("#DFFF00")}[i]);c.save();c.rotate(circuitRot[i]*90,x,cy);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(dp(8));p.setColor(Color.WHITE);c.drawLine(x-dp(26),cy,x+dp(26),cy,p);c.restore();}
+        if(ok){p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(dp(5));p.setColor(C("#FFE94D"));c.drawLine(bx+dp(36),cy,lx-dp(35),cy,p);for(int r=1;r<=3;r++){p.setColor(Color.argb(130/r,255,233,77));c.drawCircle(lx,cy-dp(8),dp(28+r*12),p);}mangaTxt(c,"POWER!",W*.5f,H*.72f,24,C("#DFFF00"),Paint.Align.CENTER);if(System.currentTimeMillis()-roomStart>450)solved();}
+    }
     private void l38(Canvas c){header(c,"Use the magnet to steal the metal puck.");p.setStyle(Paint.Style.FILL);p.setColor(C("#9EA6B6"));c.drawCircle(metalX,metalY,dp(24),p);p.setColor(C("#FF2EA6"));c.drawRoundRect(magnetX-dp(38),magnetY-dp(24),magnetX+dp(38),magnetY+dp(24),dp(16),dp(16),p);mangaTxt(c,"MAG",magnetX,magnetY+sp(6),15,Color.WHITE,Paint.Align.CENTER);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(dp(4));p.setColor(C("#DFFF00"));c.drawCircle(getWidth()*.18f,getHeight()*.40f,dp(34),p);if(Math.hypot(magnetX-metalX,magnetY-metalY)<dp(95)){metalX+=(magnetX-metalX)*.10f;metalY+=(magnetY-metalY)*.10f;}if(Math.hypot(metalX-getWidth()*.18f,metalY-getHeight()*.40f)<dp(34))solved();}
     private void l39(Canvas c){header(c,"Rotate the tiles until the path is continuous.");float startX=getWidth()*.18f,y=getHeight()*.53f,sz=dp(74);boolean ok=true;for(int i=0;i<4;i++){float x=startX+i*getWidth()*.21f;neonChip(c,x-sz/2,y-sz/2,sz,sz,C("#111936"),C("#39F7FF"));c.save();c.rotate(tileRot[i]*90,x,y);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(dp(10));p.setColor(C("#FFE94D"));c.drawLine(x-sz*.34f,y,x+sz*.34f,y,p);c.restore();if(tileRot[i]%2!=0)ok=false;}if(ok)solved();}
     private void l40(Canvas c){header(c,"Search the room with the flashlight.");p.setStyle(Paint.Style.FILL);p.setColor(Color.argb(205,0,0,0));c.drawRect(0,getHeight()*.26f,getWidth(),getHeight(),p);Path cone=new Path();cone.moveTo(flashlightX,flashlightY);cone.lineTo(flashlightX-dp(110),flashlightY-dp(180));cone.lineTo(flashlightX+dp(110),flashlightY-dp(180));cone.close();p.setColor(Color.argb(150,255,233,77));c.drawPath(cone,p);mangaTxt(c,"★",getWidth()*.72f,getHeight()*.45f,34,C("#DFFF00"),Paint.Align.CENTER);if(Math.hypot(flashlightX-getWidth()*.72f,flashlightY-getHeight()*.63f)<dp(110)){hiddenMarkFound=true;}if(hiddenMarkFound){mangaTxt(c,"TAP THE STAR",getWidth()/2f,getHeight()*.76f,20,Color.WHITE,Paint.Align.CENTER);}}
@@ -879,7 +998,7 @@ public class GameView extends View implements SensorEventListener {
                 if(y>getHeight()*.885f){screen=0;invalidate();return true;}}
             return true;
         }
-        if(screen==95){if(a==MotionEvent.ACTION_DOWN&&System.currentTimeMillis()-fakeAdShownAt>=3000L&&in(x,y,getWidth()*.22f,getHeight()*.74f,getWidth()*.78f,getHeight()*.86f)){int next=pendingScreenAfterAd;pendingScreenAfterAd=-1;screen=next;if(screen>=1&&screen<=TOTAL_LEVELS){roomStart=System.currentTimeMillis();resetLevel();}((MainActivity)getContext()).syncMusicForScreen(screen);invalidate();}return true;}
+        if(screen==95){if(a==MotionEvent.ACTION_DOWN&&System.currentTimeMillis()-fakeAdShownAt>=3000L&&in(x,y,getWidth()*.22f,getHeight()*.74f,getWidth()*.78f,getHeight()*.86f)){int next=pendingScreenAfterAd;pendingScreenAfterAd=-1;screen=next;if(returnToSnowFailAfterAd&&screen==21){returnToSnowFailAfterAd=false;snowEasterPhase=4;snowEasterAt=System.currentTimeMillis();}else if(screen>=1&&screen<=TOTAL_LEVELS){roomStart=System.currentTimeMillis();resetLevel();}((MainActivity)getContext()).syncMusicForScreen(screen);invalidate();}return true;}
         if(screen==99){ if(a==MotionEvent.ACTION_DOWN){screen=90;levelPage=AREA_COUNT-1;invalidate();}return true; }
         if(hintOpen){
             if(a==MotionEvent.ACTION_DOWN){float hx=getWidth()*.07f,hy=getHeight()*.24f,hw=getWidth()*.86f,hh=getHeight()*.38f;if(in(x,y,hx+hw-dp(78),hy,hx+hw,hy+dp(78))||in(x,y,hx+hw*.24f,hy+hh-dp(90),hx+hw*.76f,hy+hh)){hintOpen=false;invalidate();}}
@@ -912,12 +1031,17 @@ public class GameView extends View implements SensorEventListener {
             case 20: if(a==MotionEvent.ACTION_DOWN&&y>getHeight()*.58f){float top=getHeight()*.62f;for(int r=0;r<3;r++)for(int col=0;col<3;col++){float kx=getWidth()*.22f+col*getWidth()*.28f,ky=top+r*dp(62);if(Math.hypot(x-kx,y-ky)<dp(34)&&code.length()<3)code+=String.valueOf(r*3+col+1);}}break;
             case 21:
                 float scx=getWidth()*.50f,sheadY=getHeight()*.435f,snoseX=scx,snoseY=sheadY+dp(16),sbuttX=getWidth()*.69f,sbuttY=getHeight()*.655f;
-                if(snowEasterPhase==3){if(a==MotionEvent.ACTION_DOWN&&in(x,y,getWidth()*.18f,getHeight()*.56f,getWidth()*.82f,getHeight()*.66f)){roomStart=System.currentTimeMillis();resetLevel();}else if(a==MotionEvent.ACTION_DOWN&&in(x,y,getWidth()*.18f,getHeight()*.66f,getWidth()*.82f,getHeight()*.78f)){screen=0;resetLevel();}break;}if(snowEasterPhase>0)break;
+                if(snowEasterPhase==4){if(a==MotionEvent.ACTION_DOWN&&in(x,y,getWidth()*.18f,getHeight()*.56f,getWidth()*.82f,getHeight()*.66f)){roomStart=System.currentTimeMillis();resetLevel();}else if(a==MotionEvent.ACTION_DOWN&&in(x,y,getWidth()*.18f,getHeight()*.66f,getWidth()*.82f,getHeight()*.78f)){screen=0;resetLevel();}break;}if(snowEasterPhase>0)break;
                 if(a==MotionEvent.ACTION_DOWN){if(!snowNose&&Math.hypot(x-carrotX,y-carrotY)<dp(75)){snowDrag=1;keyDX=x-carrotX;keyDY=y-carrotY;}else if(!snowEye1&&Math.hypot(x-stone1X,y-stone1Y)<dp(46)){snowDrag=2;keyDX=x-stone1X;keyDY=y-stone1Y;}else if(!snowEye2&&Math.hypot(x-stone2X,y-stone2Y)<dp(46)){snowDrag=3;keyDX=x-stone2X;keyDY=y-stone2Y;}else if(y>sheadY+dp(18)&&y<sheadY+dp(75)&&Math.abs(x-scx)<dp(78)){drawingSmile=true;snowSmilePoints.clear();snowSmilePoints.add(new PointF(x,y));}}
-                if(a==MotionEvent.ACTION_MOVE){if(snowDrag==1){carrotX=x-keyDX;carrotY=y-keyDY;if(Math.hypot(carrotX-sbuttX,carrotY-sbuttY)<dp(72)){snowEasterPhase=1;snowEasterAt=System.currentTimeMillis();snowDrag=0;}}else if(snowDrag==2){stone1X=x-keyDX;stone1Y=y-keyDY;}else if(snowDrag==3){stone2X=x-keyDX;stone2Y=y-keyDY;}if(drawingSmile&&snowSmilePoints.size()<100)snowSmilePoints.add(new PointF(x,y));}
+                if(a==MotionEvent.ACTION_MOVE){if(snowDrag==1){carrotX=x-keyDX;carrotY=y-keyDY;if(snowEye1&&snowEye2&&Math.hypot(carrotX-sbuttX,carrotY-sbuttY)<dp(72)){snowEasterPhase=1;snowEasterAt=System.currentTimeMillis();snowDrag=0;}}else if(snowDrag==2){stone1X=x-keyDX;stone1Y=y-keyDY;}else if(snowDrag==3){stone2X=x-keyDX;stone2Y=y-keyDY;}if(drawingSmile&&snowSmilePoints.size()<100)snowSmilePoints.add(new PointF(x,y));}
                 if(a==MotionEvent.ACTION_UP||a==MotionEvent.ACTION_CANCEL){if(snowDrag==1){if(Math.abs(carrotX-snoseX)<dp(48)&&Math.abs(carrotY-snoseY)<dp(38)){snowNose=true;}else{carrotX=getWidth()*.20f;carrotY=getHeight()*.77f;}}if(snowDrag==2){if(stone1X>scx-dp(70)&&stone1X<scx-dp(4)&&stone1Y>sheadY-dp(48)&&stone1Y<sheadY+dp(18)){snowEye1=true;}else{stone1X=getWidth()*.43f;stone1Y=getHeight()*.80f;}}if(snowDrag==3){if(stone2X>scx+dp(4)&&stone2X<scx+dp(70)&&stone2Y>sheadY-dp(48)&&stone2Y<sheadY+dp(18)){snowEye2=true;}else{stone2X=getWidth()*.58f;stone2Y=getHeight()*.80f;}}snowDrag=0;if(drawingSmile){drawingSmile=false;if(snowSmilePoints.size()>=5){PointF f=snowSmilePoints.get(0),l=snowSmilePoints.get(snowSmilePoints.size()-1),m=snowSmilePoints.get(snowSmilePoints.size()/2);float ends=(f.y+l.y)/2f;if(f.x<scx-dp(18)&&l.x>scx+dp(18)&&m.y>ends+dp(4))snowSmile=true;else{snowSmilePoints.clear();showToast("DRAW A CURVED SMILE");}}}}break;
             case 22: if(a==MotionEvent.ACTION_DOWN&&y>getHeight()*.64f){oppositeChoice=x>getWidth()*.5f?1:0;if(oppositeChoice==0)showToast("That is the door he picked — so it is wrong.");}break;
-            case 23: gatePressed=false;for(int i=0;i<pointerCount;i++)if(in(px[i],py[i],getWidth()*.06f,getHeight()*.75f,getWidth()*.40f,getHeight()*.88f))gatePressed=true;break;
+            case 23:
+                if(a==MotionEvent.ACTION_DOWN && in(x,y,getWidth()*.06f,getHeight()*.75f,getWidth()*.40f,getHeight()*.88f))gatePressed=true;
+                if(a==MotionEvent.ACTION_MOVE){gatePressed=false;for(int i=0;i<e.getPointerCount();i++)if(in(e.getX(i),e.getY(i),getWidth()*.06f,getHeight()*.75f,getWidth()*.40f,getHeight()*.88f))gatePressed=true;}
+                if(a==MotionEvent.ACTION_POINTER_UP){gatePressed=false;for(int i=0;i<e.getPointerCount();i++)if(i!=idx&&in(e.getX(i),e.getY(i),getWidth()*.06f,getHeight()*.75f,getWidth()*.40f,getHeight()*.88f))gatePressed=true;}
+                if(a==MotionEvent.ACTION_UP||a==MotionEvent.ACTION_CANCEL)gatePressed=false;
+                break;
             case 24: if(a==MotionEvent.ACTION_DOWN)showToast("Touching will not take it with you.");break;
             case 25: break;
             case 26:
@@ -926,29 +1050,43 @@ public class GameView extends View implements SensorEventListener {
                 if(a==MotionEvent.ACTION_DOWN && selfieBitmap==null && !selfieRequested && in(x,y,getWidth()*.16f,getHeight()*.66f,getWidth()*.84f,getHeight()*.80f)){selfieRequested=true;((MainActivity)getContext()).startSelfieCapture();invalidate();}
                 break;
             case 28:
-                if(a==MotionEvent.ACTION_DOWN){if(beginFoundPieceDrag(x,y,deskMask)){}else if(foundPlacedMask==7&&Math.hypot(x-finalKeyX,y-finalKeyY)<dp(85)){finalKeyDrag=true;foundDX=x-finalKeyX;foundDY=y-finalKeyY;}else if(in(x,y,getWidth()*.12f,getHeight()*.40f+dp(30),getWidth()*.42f,getHeight()*.40f+dp(132))){deskDrawerOpen=true;}else if(Math.hypot(x-deskMugX,y-deskMugY)<dp(55)){deskMugDrag=true;keyDX=x-deskMugX;keyDY=y-deskMugY;}else if(in(x,y,getWidth()*.64f,getHeight()*.36f,getWidth()*.90f,getHeight()*.51f))deskBookHold=System.currentTimeMillis();}
-                if(a==MotionEvent.ACTION_MOVE){if(foundDrag>0)moveFoundPiece(x,y);else if(finalKeyDrag){finalKeyX=x-foundDX;finalKeyY=y-foundDY;}else if(deskMugDrag){deskMugX=x-keyDX;deskMugY=y-keyDY;}}
-                if(a==MotionEvent.ACTION_UP||a==MotionEvent.ACTION_CANCEL){endFoundPieceDrag();deskMugDrag=false;finalKeyDrag=false;if(deskBookHold>0&&System.currentTimeMillis()-deskBookHold>1050){}deskBookHold=0;}break;
-            case 29:
-                if(a==MotionEvent.ACTION_DOWN){if(beginFoundPieceDrag(x,y,toyMask)){}else if(foundPlacedMask==7&&Math.hypot(x-finalKeyX,y-finalKeyY)<dp(85)){finalKeyDrag=true;foundDX=x-finalKeyX;foundDY=y-finalKeyY;}else if(Math.hypot(x-getWidth()*.28f,y-getHeight()*.49f)<dp(60)){toyBearTaps++;}else if(Math.hypot(x-toyBallX,y-toyBallY)<dp(58)){toyBallDrag=true;keyDX=x-toyBallX;keyDY=y-toyBallY;}}
-                if(a==MotionEvent.ACTION_MOVE){if(foundDrag>0)moveFoundPiece(x,y);else if(finalKeyDrag){finalKeyX=x-foundDX;finalKeyY=y-foundDY;}else if(toyBallDrag){toyBallX=x-keyDX;toyBallY=y-keyDY;}}if(a==MotionEvent.ACTION_UP||a==MotionEvent.ACTION_CANCEL){endFoundPieceDrag();toyBallDrag=false;finalKeyDrag=false;}break;
+                if(a==MotionEvent.ACTION_DOWN){
+                    if(in(x,y,deskDrawerX,getHeight()*.355f,deskDrawerX+getWidth()*.28f,getHeight()*.355f+dp(95))){deskDrag=1;keyDX=x-deskDrawerX;}
+                    else if(Math.hypot(x-deskMugX,y-deskMugY)<dp(58)){deskDrag=2;keyDX=x-deskMugX;keyDY=y-deskMugY;}
+                    else if(Math.hypot(x-deskBookX,y-deskBookY)<dp(75)){deskDrag=3;keyDX=x-deskBookX;keyDY=y-deskBookY;}
+                    else if(y>getHeight()*.61f){float top28=getHeight()*.665f;for(int rr=0;rr<3;rr++)for(int cc=0;cc<3;cc++){float kx=getWidth()*.22f+cc*getWidth()*.28f,ky=top28+rr*dp(62);if(Math.hypot(x-kx,y-ky)<dp(34)&&deskCode.length()<3)deskCode+=String.valueOf(rr*3+cc+1);}}
+                }
+                if(a==MotionEvent.ACTION_MOVE){if(deskDrag==1)deskDrawerX=Math.max(-getWidth()*.12f,Math.min(getWidth()*.60f,x-keyDX));else if(deskDrag==2){deskMugX=x-keyDX;deskMugY=y-keyDY;}else if(deskDrag==3){deskBookX=x-keyDX;deskBookY=y-keyDY;}}
+                if(a==MotionEvent.ACTION_UP||a==MotionEvent.ACTION_CANCEL)deskDrag=0;
+                break;
+            case 29: break;
             case 30:
-                if(a==MotionEvent.ACTION_DOWN){lastMoveX=x;if(beginFoundPieceDrag(x,y,kitchenMask)){}else if(foundPlacedMask==7&&Math.hypot(x-finalKeyX,y-finalKeyY)<dp(85)){finalKeyDrag=true;foundDX=x-finalKeyX;foundDY=y-finalKeyY;}else if(Math.hypot(x-appleX,y-appleY)<dp(55)){appleDrag=true;keyDX=x-appleX;keyDY=y-appleY;}else if(in(x,y,getWidth()*.47f,getHeight()*.42f,getWidth()*.78f,getHeight()*.58f)){toasterTaps++;}}
-                if(a==MotionEvent.ACTION_MOVE){if(foundDrag>0)moveFoundPiece(x,y);else if(finalKeyDrag){finalKeyX=x-foundDX;finalKeyY=y-foundDY;}else if(appleDrag){appleX=x-keyDX;appleY=y-keyDY;}else if(y>getHeight()*.58f&&Math.abs(x-getWidth()*.50f)<dp(85)){jarTwist+=Math.abs(x-lastMoveX)*.9f;lastMoveX=x;}}if(a==MotionEvent.ACTION_UP||a==MotionEvent.ACTION_CANCEL){endFoundPieceDrag();appleDrag=false;finalKeyDrag=false;}break;
+                if(a==MotionEvent.ACTION_DOWN&&pinataHits<8){float anchorX=getWidth()*.5f,anchorY=getHeight()*.31f,len=dp(210);float pxx=anchorX+(float)Math.sin(pinataAngle)*len,pyy=anchorY+(float)Math.cos(pinataAngle)*len;if(Math.hypot(x-pxx,y-pyy)<dp(75)){pinataHits++;pinataFlashUntil=System.currentTimeMillis()+500;pinataAV+=(x<pxx?1:-1)*1.7f;showToast(pinataHits<8?"WHACK!":"CRACK!!");}}
+                break;
             case 31:
-                if(a==MotionEvent.ACTION_DOWN&&Math.abs(x-getWidth()*.50f)<dp(70)&&y>getHeight()*.40f&&y<getHeight()*.64f)vaultHoldStart=System.currentTimeMillis();if((a==MotionEvent.ACTION_UP||a==MotionEvent.ACTION_CANCEL)&&vaultHoldStart>0){if(System.currentTimeMillis()-vaultHoldStart>1100)vaultMask|=2;vaultHoldStart=0;}break;
+                if(a==MotionEvent.ACTION_DOWN&&Math.hypot(x-perspectiveX,y-perspectiveY)<dp(90)){perspectiveDrag=true;keyDX=x-perspectiveX;keyDY=y-perspectiveY;}
+                if(a==MotionEvent.ACTION_MOVE&&perspectiveDrag){perspectiveX=x-keyDX;perspectiveY=y-keyDY;}
+                if(a==MotionEvent.ACTION_UP||a==MotionEvent.ACTION_CANCEL)perspectiveDrag=false;
+                break;
             case 32:
-                if(a==MotionEvent.ACTION_DOWN){float[] pxx={.20f,.40f,.60f,.80f};for(int i=0;i<4;i++)if(Math.abs(x-getWidth()*pxx[i])<dp(38)&&y>getHeight()*.36f&&y<getHeight()*.72f){pinPos[i]=(pinPos[i]+1)%3;break;}}break;
+                if(a==MotionEvent.ACTION_DOWN){float[] pxx={.18f,.39f,.61f,.82f};for(int i=0;i<4;i++)if(Math.abs(x-getWidth()*pxx[i])<dp(36)&&Math.abs(y-pinY[i])<dp(45)){pinDrag=i;break;}}
+                if(a==MotionEvent.ACTION_MOVE&&pinDrag>=0)pinY[pinDrag]=Math.max(getHeight()*.39f,Math.min(getHeight()*.68f,y));
+                if(a==MotionEvent.ACTION_UP||a==MotionEvent.ACTION_CANCEL){if(pinDrag>=0){float[] target={getHeight()*.48f,getHeight()*.57f,getHeight()*.43f,getHeight()*.62f};if(Math.abs(pinY[pinDrag]-target[pinDrag])<dp(18))pinY[pinDrag]=target[pinDrag];}pinDrag=-1;}
+                break;
             case 33:
-                if(a==MotionEvent.ACTION_DOWN){float[] lx={.18f,.39f,.61f,.82f};int logicHit=-1;for(int i=0;i<4;i++)if(Math.hypot(x-getWidth()*lx[i],y-getHeight()*.54f)<dp(62))logicHit=i;if(logicHit>=0){if(logicHit==logicTarget[logicPos]){logicPos++;if(logicPos==4)solved();}else{logicPos=0;showToast("ORDER RESET");}}}break;
+                if(a==MotionEvent.ACTION_DOWN){float[] lx={.18f,.40f,.62f,.82f};int logicHit=-1;for(int i=0;i<4;i++)if(Math.hypot(x-getWidth()*lx[i],y-getHeight()*.54f)<dp(60))logicHit=i;if(logicHit>=0){if(logicHit==logicTarget[logicPos]){logicPos++;if(logicPos==4)solved();}else{logicPos=0;showToast("ORDER RESET");}}}
+                break;
             case 34:
                 if(a==MotionEvent.ACTION_DOWN&&in(x,y,getWidth()*.14f,getHeight()*.36f,getWidth()*.86f,getHeight()*.58f)){rubbing=true;lastMoveX=x;}if(a==MotionEvent.ACTION_MOVE&&rubbing){rubProgress=Math.min(120,rubProgress+Math.abs(x-lastMoveX)*.08f+2);lastMoveX=x;}if(a==MotionEvent.ACTION_UP||a==MotionEvent.ACTION_CANCEL)rubbing=false;if(rubProgress>=100&&a==MotionEvent.ACTION_DOWN&&y>getHeight()*.58f){float rubTop=getHeight()*.62f;for(int rr=0;rr<3;rr++)for(int cc=0;cc<3;cc++){float kx=getWidth()*.22f+cc*getWidth()*.28f,ky=rubTop+rr*dp(62);if(Math.hypot(x-kx,y-ky)<dp(34)&&revealCode.length()<3)revealCode+=String.valueOf(rr*3+cc+1);}}break;
             case 35:
-                if(a==MotionEvent.ACTION_DOWN){if(beginFoundPieceDrag(x,y,forgeMask)){}else if(foundPlacedMask==7&&Math.hypot(x-finalKeyX,y-finalKeyY)<dp(85)){finalKeyDrag=true;foundDX=x-finalKeyX;foundDY=y-finalKeyY;}else if(Math.hypot(x-forgePanelX,y-getHeight()*.43f)<dp(75)){forgePanelDrag=true;keyDX=x-forgePanelX;}else if(in(x,y,getWidth()*.43f,getHeight()*.36f,getWidth()*.70f,getHeight()*.52f)){forgeGemTaps++;}else if(Math.abs(x-getWidth()*.82f)<dp(55)&&Math.abs(y-forgePullY)<dp(60)){forgePullDrag=true;keyDY=y-forgePullY;}}
-                if(a==MotionEvent.ACTION_MOVE){if(foundDrag>0)moveFoundPiece(x,y);else if(finalKeyDrag){finalKeyX=x-foundDX;finalKeyY=y-foundDY;}else if(forgePanelDrag)forgePanelX=x-keyDX;else if(forgePullDrag)forgePullY=Math.max(getHeight()*.40f,Math.min(getHeight()*.62f,y-keyDY));}
-                if(a==MotionEvent.ACTION_UP||a==MotionEvent.ACTION_CANCEL){endFoundPieceDrag();forgePanelDrag=false;forgePullDrag=false;finalKeyDrag=false;}break;
+                if(a==MotionEvent.ACTION_DOWN){if(beginFoundPieceDrag(x,y,forgeMask)){}else if(Math.hypot(x-forgePanelX,y-getHeight()*.45f)<dp(75)){forgePanelDrag=true;keyDX=x-forgePanelX;}else if(in(x,y,getWidth()*.43f,getHeight()*.39f,getWidth()*.66f,getHeight()*.51f)){forgeGemTaps++;}else if(Math.abs(x-getWidth()*.82f)<dp(55)&&Math.abs(y-forgePullY)<dp(60)){forgePullDrag=true;keyDY=y-forgePullY;}}
+                if(a==MotionEvent.ACTION_MOVE){if(foundDrag>0)moveFoundPiece(x,y);else if(forgePanelDrag)forgePanelX=x-keyDX;else if(forgePullDrag)forgePullY=Math.max(getHeight()*.38f,Math.min(getHeight()*.64f,y-keyDY));}
+                if(a==MotionEvent.ACTION_UP||a==MotionEvent.ACTION_CANCEL){endFoundPieceDrag();forgePanelDrag=false;forgePullDrag=false;}
+                break;
             case 36: if(a==MotionEvent.ACTION_DOWN){float[] xs36={.25f,.50f,.75f};int[] tgt36={1,0,2};for(int i=0;i<3;i++)if(Math.hypot(x-getWidth()*xs36[i],y-getHeight()*.53f)<dp(55)){if(neonSwitchStep<3&&i==tgt36[neonSwitchStep])neonSwitchStep++;else{neonSwitchStep=0;showToast("RESET");}break;}}break;
-            case 37: {float cx=getWidth()*.5f,cy=getHeight()*.53f;if(a==MotionEvent.ACTION_DOWN&&Math.hypot(x-cx,y-cy)<dp(130)){dialDrag=true;lastDialAngle=(float)Math.toDegrees(Math.atan2(y-cy,x-cx));}if(a==MotionEvent.ACTION_MOVE&&dialDrag){float na=(float)Math.toDegrees(Math.atan2(y-cy,x-cx));dialAngle=(dialAngle+(na-lastDialAngle)+360)%360;lastDialAngle=na;}if(a==MotionEvent.ACTION_UP||a==MotionEvent.ACTION_CANCEL)dialDrag=false;}break;
+            case 37:
+                if(a==MotionEvent.ACTION_DOWN){float[] xs37={.27f,.43f,.59f,.75f};for(int i=0;i<4;i++)if(Math.abs(x-getWidth()*xs37[i])<dp(43)&&Math.abs(y-getHeight()*.55f)<dp(48)){circuitRot[i]=(circuitRot[i]+1)%2;break;}}
+                break;
             case 38: if(a==MotionEvent.ACTION_DOWN&&Math.hypot(x-magnetX,y-magnetY)<dp(60)){magnetDrag=true;keyDX=x-magnetX;keyDY=y-magnetY;}if(a==MotionEvent.ACTION_MOVE&&magnetDrag){magnetX=x-keyDX;magnetY=y-keyDY;}if(a==MotionEvent.ACTION_UP||a==MotionEvent.ACTION_CANCEL)magnetDrag=false;break;
             case 39: if(a==MotionEvent.ACTION_DOWN){float startX=getWidth()*.18f,y39=getHeight()*.53f;for(int i=0;i<4;i++){float xx=startX+i*getWidth()*.21f;if(Math.abs(x-xx)<dp(42)&&Math.abs(y-y39)<dp(42)){tileRot[i]=(tileRot[i]+1)%4;break;}}}break;
             case 40: if(a==MotionEvent.ACTION_DOWN&&Math.hypot(x-flashlightX,y-flashlightY)<dp(70)){flashlightDrag=true;keyDX=x-flashlightX;keyDY=y-flashlightY;}if(a==MotionEvent.ACTION_MOVE&&flashlightDrag){flashlightX=x-keyDX;flashlightY=y-keyDY;}if(a==MotionEvent.ACTION_UP||a==MotionEvent.ACTION_CANCEL)flashlightDrag=false;if(hiddenMarkFound&&a==MotionEvent.ACTION_DOWN&&Math.hypot(x-getWidth()*.72f,y-getHeight()*.45f)<dp(50))solved();break;
