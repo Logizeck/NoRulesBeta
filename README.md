@@ -1,29 +1,17 @@
-# NO RULES — Beta 0.5.0
+# NO RULES — Beta 0.5.3
 
-Test build with 27 puzzle rooms.
+Corrective visual/UI build focused on consistency and puzzle readability.
 
-## Key changes in 0.5.0
-- Fixed Canvas text rendering so labels no longer inherit thick STROKE settings from game artwork.
-- Reworked typography for clearer Android phone rendering.
-- Added the scarlet / white / black NR pseudo-kanji launcher icon.
-- Added Level 26: Beat Copy — listen to a four-tone rhythm and reproduce the timing by tapping.
-- Added Level 27: Selfie Trouble — request camera access, capture a selfie, then display it with cartoon glasses and a moustache.
-- Existing persistent hint overlay and MENU button retained.
+## Main changes
+- New comic UI language: irregular cards, stronger shadows, rounded bold typography and less rigid composition.
+- Main menu no longer advertises a fixed number of levels.
+- Canonical recurring objects: the same wooden door and the same gold key visual are reused across levels.
+- Key fragments now visually belong to the canonical key (ring / shaft / teeth) instead of being unrelated shapes.
+- Existing emoji-key placeholders were replaced with the canonical key rendering.
+- Key assembly receives proximity feedback when a fragment approaches the correct silhouette.
+- Snowman starts without eyes or mouth; subtle empty eye sockets guide placement without spelling out the solution.
+- Snowman prompt is less explicit ("MAKE HIM A FACE") so the scene itself carries more of the clue.
+- Header, buttons, speech bubbles, instruction cards and backgrounds have been restyled for a more playful, less regular look.
 
-## Privacy / camera test behavior
-The selfie room launches the device camera through Android's camera intent. This beta uses the returned preview bitmap in memory for the puzzle and does not intentionally write the image to the app's own storage.
-
-## Build
-The included GitHub Actions workflow builds `app-debug.apk` and uploads it as `NoRulesBeta-APK`.
-
-## Beta 0.5.1
-
-- 35 test levels.
-- New 3D-style snowman asset and expanded snowman fail/easter-egg sequence.
-- New key-fragment hunt rooms: Messy Desk, Toy Box, Kitchen Chaos, Sensor Vault, Master Key Forge.
-- New pitch-memory audio room, logic room and rub-to-reveal room.
-- Hidden surprise reactions on the title, balloon, ninja and snowman.
-- Main menu no longer advertises a fixed level count.
-- Text rendering now uses scaled font density for better accessibility/readability.
-- Approved scarlet/white/black NR pseudo-kanji launcher icon.
-- Optional BGM integration: add `app/src/main/res/raw/bgm_main.ogg` and rebuild.
+## Goal of this build
+Test whether the revised visual language makes interactions easier to infer without making the puzzles self-solving.

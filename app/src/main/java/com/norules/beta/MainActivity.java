@@ -53,7 +53,7 @@ public class MainActivity extends Activity {
     }
 
     public void syncMusicForScreen(int screen) {
-        audioPuzzle = (screen == 26 || screen == 32);
+        audioPuzzle = false;
         if (bgm == null) return;
         if (audioPuzzle) {
             if (bgm.isPlaying()) bgm.pause();

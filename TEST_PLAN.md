@@ -1,28 +1,12 @@
-# Beta 0.5 test notes
+# NO RULES 0.5.3 — Test checklist
 
-For each level record:
-- Solved without hint? Y/N
-- Time to first correct insight
-- Was the solution logically deducible after seeing it? Y/N
-- Was any text hard to read? Y/N + screenshot
-- Did any control fail on the device? Y/N + device/Android version
-- Fun score 1–5
-
-Special tests:
-- L24 Screenshot: Android 14+ hardware screenshot detection.
-- L26 Beat Copy: test with media volume low/high and with Bluetooth audio.
-- L27 Selfie Trouble: test permission allow/deny, camera cancel, portrait selfie, different camera apps.
-
-## Beta 0.5.1 focus
-
-Test levels 28–35 especially for multi-step clarity. For each room note:
-- Did the player understand that several sub-actions were required?
-- Did they discover at least one key fragment without an hint?
-- Did the final step feel earned rather than arbitrary?
-- Was any hidden surprise discovered organically?
-
-Hidden-surprise checks:
-- Tap the NO RULES title repeatedly.
-- Pester the balloon instead of solving it normally.
-- Knock far too many times on the ninja room.
-- Trigger the snowman carrot easter egg and verify: speech bubble -> blush -> melt animation -> fail screen -> Retry/Menu.
+1. Check every level for text clipping, overlaps and unreadable labels.
+2. Confirm MENU and HINT remain tappable on different screen sizes.
+3. Level 1: canonical gold key should remain recognizable while scaling and dragging.
+4. Levels 3, 7, 8, 17 and 24: verify the recurring key is visually identical.
+5. Level 21: snowman must begin without eyes or mouth; stones should visually match the subtle eye sockets; carrot easter egg must still trigger the fail animation.
+6. Level 26: all three pieces must clearly look like parts of one key; correct target should gain green proximity feedback.
+7. Levels 28–31 and 35: key pieces must use exactly the same canonical fragment set.
+8. Door: verify the same wooden/brass door appears consistently in recurring door puzzles.
+9. Note any puzzle that still requires the hint because the scene itself gives no usable clue.
+10. Record any place where the new visual decoration obscures interaction rather than helping it.
