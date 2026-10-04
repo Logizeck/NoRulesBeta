@@ -1,4 +1,11 @@
-# NO RULES — Beta B0.5
+# NO RULES — Beta B0.5.1
+
+Build-fix release for B0.5 gameplay rework.
+
+## Build fix
+- Restored the `lastMoveX` interaction-state field used by the Rub It Out gesture handler. Its removal during the B0.5 refactor caused Java compilation to fail in GitHub Actions.
+- Version bumped to 11 / B0.5.1.
+
 
 Gameplay-rework build focused on variety, physical interaction, camera integration and stronger puzzle logic.
 

@@ -162,6 +162,7 @@ public class GameView extends View implements SensorEventListener {
     private final int[] soundSeq={0,2,1,0}; private final ArrayList<Integer> soundTaps=new ArrayList<>(); private boolean soundPlaying=false,soundReady=false;
     private final int[] logicTarget={1,3,0,2}; private int logicPos=0;
     private float rubProgress=0; private boolean rubbing=false; private String revealCode="";
+    private float lastMoveX=0;
     private int forgeMask=0; private int forgeShakeStart=0; private int forgeGemTaps=0; private float forgePanelX; private boolean forgePanelDrag=false; private long forgeTwoFingerStart=0; private float forgeKeyX,forgeKeyY; private boolean forgeKeyDrag=false;
 
     // L36-L50 new puzzle state
