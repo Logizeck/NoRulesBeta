@@ -8,3 +8,29 @@ UserSettings/
 MemoryCaptures/
 .vs/
 .gradle/
+
+# Android builds
+*.apk
+*.aab
+
+# Android signing
+*.keystore
+*.jks
+
+# Unity / Visual Studio generated files
+*.csproj
+*.sln
+*.suo
+*.user
+*.userprefs
+*.pidb
+*.booproj
+*.svd
+
+# IDE settings
+.idea/
+.vscode/
+
+# OS junk
+.DS_Store
+Thumbs.db
