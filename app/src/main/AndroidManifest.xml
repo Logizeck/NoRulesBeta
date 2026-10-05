@@ -1,17 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <uses-permission android:name="android.permission.DETECT_SCREEN_CAPTURE" />
-    <uses-permission android:name="android.permission.CAMERA" />
-    <uses-feature android:name="android.hardware.camera" android:required="false" />
-
     <application
         android:allowBackup="true"
-        android:label="NO RULES — Beta"
+        android:label="NO RULES — B1.0 Preview"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:theme="@android:style/Theme.Material.Light.NoActionBar"
         android:supportsRtl="true">
-        <activity android:name=".CameraCaptureActivity" android:screenOrientation="portrait" android:exported="false" />
         <activity
             android:name=".MainActivity"
             android:screenOrientation="portrait"

@@ -8,7 +8,7 @@ android {
         applicationId 'com.norules.beta'
         minSdk 23
         targetSdk 35
-        versionCode 11
-        versionName 'B0.5.1'
+        versionCode 20
+        versionName 'B1.0-preview10'
     }
 }
