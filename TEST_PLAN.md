@@ -1,16 +1,9 @@
-# B1.0 Preview 10 — Test Plan
+# B1 Unity Preview 5 — Test Plan
 
-- Confirm the visual background of each level matches the approved concept.
-- Confirm MENU and HINT/HELP are always visible and tappable.
-- Confirm no solution text is shown unless HELP/HINT is opened.
-- Test language selector; Italian must localize menu chrome, titles overlaid on levels, buttons and hints.
-- L1 pinch then drag.
-- L2 accelerometer maze.
-- L3 memorize/paint pattern.
-- L4 no touch for 7 seconds.
-- L5 media volume to zero.
-- L6 shake then tap lock.
-- L7 feed three snack zones.
-- L8 rotate mirrors.
-- L9 rotate circuit modules.
-- L10 upward swipes.
+- **Level 1**: confirm two-finger pinch changes the key size smoothly; after shrinking, drag to the door to solve.
+- **Level 2**: tilt the Android phone in all directions; the ball should move smoothly, respect the maze barriers, and solve at the glowing centre.
+- **Level 3**: watch the pattern for 2.5 seconds; choose a bucket and repaint all nine cells. Wrong colors remain editable.
+- **Level 4**: leave the phone untouched for 7 seconds; any play-area touch resets progress. MENU/HINT must not count as mistakes.
+- **Level 5**: while the procedural sound is playing, lower Android media volume to 0. The level should solve without any on-screen instruction.
+- On every level confirm MENU and HINT are visible, rounded and readable.
+- HINT must open a closable overlay instead of permanently showing the solution.
